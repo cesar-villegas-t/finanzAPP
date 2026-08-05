@@ -2,3 +2,7 @@ liberar proceso si el puerto 8008 esta ocupado:
 1. netstat -ano | findstr :8008
 2. taskkill /F /PID <PID encontrado en 1.>
 
+
+GIT:
+
+Deshacer cambios no confirmados: git restore .
