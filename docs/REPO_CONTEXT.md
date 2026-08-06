@@ -123,7 +123,7 @@ documented content is:
 @echo off
 setlocal
 
-set "SRC=C:\finanzAPP"
+set "SRC=C:\finanzAPP_2"
 set "DST=hduser@192.168.1.49:/var/www/aifunded.es/finanzAPP"
 set "PORT=1024"
 
