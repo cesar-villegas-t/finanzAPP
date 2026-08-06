@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.db-journal
+*.db
+*.db.backup_*
+finanzas_test_*.db*
+usuarios.json
+usuarios.json.tmp
+.nicegui/
+data/
+private/
+.env
+fa/
+.tmp/
+tmp/
+utiles_para_mi.txt
