@@ -1,10 +1,18 @@
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from nicegui import ui
 
 from db.queries import cargar_datos
 from services.analytics import calcular_liquidez_por_fecha, calcular_patrimonio_total_por_fecha
 from ui.components import color_por_signo, formato_euros_sin_signo, metric_card
+
+
+COLOR_PRIMARY = "#2563EB"
+COLOR_POSITIVE = "#10B981"
+COLOR_TEXT_MUTED = "#64748B"
+COLOR_GRID_SUBTLE = "#F1F5F9"
+CHART_COLORS = ["#3B82F6", "#06B6D4", "#8B5CF6", "#F97316", "#F43F5E"]
 
 
 def prepare_chart(fig, height=420):
@@ -14,6 +22,69 @@ def prepare_chart(fig, height=420):
         margin={"l": 24, "r": 24, "t": 48, "b": 24},
     )
     return fig
+
+
+def formato_euros_hover(valor):
+    formatted = f"{valor:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+    return f"{formatted} " + "\u20ac"
+
+
+def rgba_from_hex(color, opacity):
+    red, green, blue = (int(color[i:i + 2], 16) for i in (1, 3, 5))
+    return f"rgba({red}, {green}, {blue}, {opacity})"
+
+
+def prepare_financial_area_chart(data, x_col, y_col, color):
+    chart_data = data.copy()
+    chart_data[x_col] = pd.to_datetime(chart_data[x_col])
+    chart_data["Fecha hover"] = chart_data[x_col].dt.strftime("%d/%m/%Y")
+    chart_data["Importe hover"] = chart_data[y_col].apply(formato_euros_hover)
+
+    fig = go.Figure(
+        go.Scatter(
+            x=chart_data[x_col],
+            y=chart_data[y_col],
+            customdata=chart_data[["Fecha hover", "Importe hover"]],
+            mode="lines",
+            line={"color": color, "width": 3, "shape": "spline", "smoothing": 0.4},
+            marker={"color": color, "size": 8},
+            fill="tozeroy",
+            fillgradient={
+                "type": "vertical",
+                "colorscale": [
+                    [0, rgba_from_hex(color, 0.02)],
+                    [1, rgba_from_hex(color, 0.24)],
+                ],
+            },
+            hovertemplate="%{customdata[0]}<br>%{customdata[1]}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        plot_bgcolor="#FFFFFF",
+        paper_bgcolor="rgba(255,255,255,0)",
+        hovermode="closest",
+        hoverlabel={
+            "bgcolor": "#FFFFFF",
+            "bordercolor": COLOR_GRID_SUBTLE,
+            "font": {"color": "#1E293B", "size": 13},
+        },
+        showlegend=False,
+    )
+    fig.update_xaxes(
+        showgrid=False,
+        zeroline=False,
+        tickfont={"color": COLOR_TEXT_MUTED},
+        linecolor=COLOR_GRID_SUBTLE,
+    )
+    fig.update_yaxes(
+        showgrid=True,
+        gridcolor=COLOR_GRID_SUBTLE,
+        zeroline=False,
+        ticksuffix="\u20ac",
+        tickfont={"color": COLOR_TEXT_MUTED},
+        linecolor=COLOR_GRID_SUBTLE,
+    )
+    return prepare_chart(fig)
 
 
 def render_saldo_global(usuario):
@@ -55,7 +126,13 @@ def render_saldo_global(usuario):
                 distribucion = df_tx.groupby("cuenta")["importe"].sum().reset_index()
                 distribucion = distribucion[distribucion["importe"] > 0]
                 if not distribucion.empty:
-                    fig = px.pie(distribucion, values="importe", names="cuenta", hole=0.4)
+                    fig = px.pie(
+                        distribucion,
+                        values="importe",
+                        names="cuenta",
+                        hole=0.4,
+                        color_discrete_sequence=CHART_COLORS,
+                    )
                     ui.plotly(prepare_chart(fig)).classes("plotly-chart")
                 else:
                     ui.label("No hay saldo positivo en las cuentas.").classes("text-gray-500")
@@ -65,7 +142,13 @@ def render_saldo_global(usuario):
         with ui.card().classes("chart-card"):
             ui.label("Distribución de Inversiones").classes("section-title")
             if not df_inv_latest.empty:
-                fig = px.pie(df_inv_latest, values="valor_actual", names="inversion", hole=0.4)
+                fig = px.pie(
+                    df_inv_latest,
+                    values="valor_actual",
+                    names="inversion",
+                    hole=0.4,
+                    color_discrete_sequence=CHART_COLORS,
+                )
                 ui.plotly(prepare_chart(fig)).classes("plotly-chart")
             else:
                 ui.label("Aún no hay inversiones registradas.").classes("text-gray-500")
@@ -75,17 +158,17 @@ def render_saldo_global(usuario):
             ui.label("Liquidez total por fecha").classes("section-title")
             liquidez = calcular_liquidez_por_fecha(df_tx)
             if not liquidez.empty:
-                fig = px.line(liquidez, x="Fecha", y="Liquidez", markers=True)
-                fig.update_yaxes(ticksuffix="€")
-                ui.plotly(prepare_chart(fig)).classes("plotly-chart")
+                fig = prepare_financial_area_chart(liquidez, "Fecha", "Liquidez", COLOR_PRIMARY)
+                ui.plotly(fig).classes("plotly-chart")
             else:
                 ui.label("Aún no hay transacciones registradas.").classes("text-gray-500")
         with ui.card().classes("chart-card"):
             ui.label("Patrimonio total por fecha").classes("section-title")
             patrimonio = calcular_patrimonio_total_por_fecha(df_tx, df_inv)
             if not patrimonio.empty:
-                fig = px.line(patrimonio, x="Fecha", y="Patrimonio total", markers=True)
-                fig.update_yaxes(ticksuffix="€")
-                ui.plotly(prepare_chart(fig)).classes("plotly-chart")
+                fig = prepare_financial_area_chart(
+                    patrimonio, "Fecha", "Patrimonio total", COLOR_POSITIVE
+                )
+                ui.plotly(fig).classes("plotly-chart")
             else:
                 ui.label("Aún no hay datos para calcular el patrimonio.").classes("text-gray-500")

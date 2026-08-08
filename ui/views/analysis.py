@@ -16,6 +16,9 @@ from ui.components import (
 
 
 PREFERENCIA_FILTROS_ANALISIS = "analisis_gasto_filtros"
+COLOR_POSITIVE = "#10B981"
+COLOR_NEGATIVE = "#F43F5E"
+CHART_COLORS = ["#3B82F6", "#06B6D4", "#8B5CF6", "#F97316", "#F43F5E"]
 
 
 def _sectores_disponibles(df_tx):
@@ -239,7 +242,7 @@ def render_analisis_gasto(usuario):
                     y="Balance",
                     color="Resultado",
                     title="Balance por sector",
-                    color_discrete_map={"Positivo": "#15803d", "Negativo": "#b91c1c"},
+                    color_discrete_map={"Positivo": COLOR_POSITIVE, "Negativo": COLOR_NEGATIVE},
                 )
                 fig.update_yaxes(ticksuffix="€")
                 fig.update_layout(legend_title_text="")
@@ -256,6 +259,7 @@ def render_analisis_gasto(usuario):
                         values="Pérdida",
                         hole=0.45,
                         title="Reparto de pérdidas por sector",
+                        color_discrete_sequence=CHART_COLORS,
                     )
                     ui.plotly(fig).classes("w-full")
 

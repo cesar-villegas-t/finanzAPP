@@ -31,9 +31,15 @@ from ui.components import (
     color_por_signo,
     formato_euros,
     formato_euros_sin_signo,
-    metric_card,
     refresh_view,
 )
+
+
+COLOR_PRIMARY = "#2563EB"
+COLOR_POSITIVE = "#10B981"
+COLOR_NEGATIVE = "#F43F5E"
+COLOR_SECONDARY = "#94A3B8"
+CHART_COLORS = ["#3B82F6", "#06B6D4", "#8B5CF6", "#F97316", "#F43F5E"]
 
 
 def prepare_chart(fig, height=520):
@@ -45,12 +51,210 @@ def prepare_chart(fig, height=520):
     return fig
 
 
+def build_investment_evolution_chart(evolucion, title):
+    evolucion_hover = evolucion.copy()
+    evolucion_hover["Valor inicial hover"] = evolucion_hover["Capital invertido"].apply(
+        formato_euros_sin_signo
+    )
+    evolucion_hover["Valor actual hover"] = evolucion_hover["Valor actual"].apply(
+        formato_euros_sin_signo
+    )
+    evolucion_hover["Rentabilidad hover"] = evolucion_hover["Diferencia (%)"].apply(
+        lambda valor: (
+            f"<span style='color:{COLOR_POSITIVE if valor >= 0 else COLOR_NEGATIVE}'>"
+            f"{'+' if valor > 0 else ''}{valor:.2f}%</span>"
+        )
+    )
+    hover_data = evolucion_hover[
+        ["Valor inicial hover", "Valor actual hover", "Rentabilidad hover"]
+    ]
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=evolucion_hover["Fecha"],
+            y=evolucion_hover["Capital invertido"],
+            mode="lines+markers",
+            name="Valor inicial",
+            line={"color": COLOR_PRIMARY, "width": 2},
+            marker={"size": 7},
+            hoverinfo="none",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=evolucion_hover["Fecha"],
+            y=evolucion_hover["Valor actual"],
+            mode="lines+markers",
+            name="Valor actual",
+            line={"color": COLOR_POSITIVE, "width": 3},
+            marker={"size": 7},
+            fill="tozeroy",
+            fillgradient={
+                "type": "vertical",
+                "colorscale": [
+                    (0.0, "rgba(16, 185, 129, 0.00)"),
+                    (1.0, "rgba(16, 185, 129, 0.20)"),
+                ],
+            },
+            customdata=hover_data,
+            hovertemplate=(
+                "Valor inicial: %{customdata[0]}<br>"
+                "Valor actual: %{customdata[1]}<br>"
+                "Ganancia/pérdida: %{customdata[2]}"
+                "<extra></extra>"
+            ),
+        )
+    )
+    fig.update_yaxes(ticksuffix="€")
+    fig.update_xaxes(
+        showspikes=True,
+        spikecolor=COLOR_SECONDARY,
+        spikethickness=1,
+        spikemode="across",
+        spikesnap="data",
+    )
+    fig.update_layout(
+        title=title,
+        plot_bgcolor="rgba(255,255,255,0)",
+        paper_bgcolor="rgba(255,255,255,0)",
+        legend_title_text="",
+        hovermode="x unified",
+        hoverlabel={"align": "left"},
+    )
+    fig.update_xaxes(gridcolor="rgba(148, 163, 184, 0.16)", zerolinecolor="rgba(148, 163, 184, 0.18)")
+    fig.update_yaxes(gridcolor="rgba(148, 163, 184, 0.16)", zerolinecolor="rgba(148, 163, 184, 0.18)")
+    return fig
+
+
+def calcular_evolucion_activo_registrada(df_asset):
+    if df_asset.empty:
+        return pd.DataFrame(columns=["Fecha", "Capital invertido", "Valor actual", "Diferencia (%)"])
+    df = df_asset.copy()
+    df["_fecha_orden"] = pd.to_datetime(df["fecha"], errors="coerce")
+    df["_id_orden"] = pd.to_numeric(df["id"], errors="coerce").fillna(0)
+    df = df.sort_values(["_fecha_orden", "id"], na_position="last")
+    df["Capital invertido"] = pd.to_numeric(df["dinero_inicial"], errors="coerce").fillna(0.0)
+    df["Valor actual"] = pd.to_numeric(df["valor_actual"], errors="coerce").fillna(0.0)
+    df["Diferencia (%)"] = df.apply(
+        lambda row: (
+            (row["Valor actual"] - row["Capital invertido"]) / row["Capital invertido"] * 100
+            if row["Capital invertido"]
+            else 0.0
+        ),
+        axis=1,
+    )
+    df["Fecha"] = df["fecha"].astype(str)
+    return df[[
+        "Fecha",
+        "Capital invertido",
+        "Valor actual",
+        "Diferencia (%)",
+        "_fecha_orden",
+        "_id_orden",
+    ]]
+
+
 def opciones_con_valor(opciones, valor):
     return opciones if valor in opciones else [*opciones, valor]
 
 
 def ordenar_catalogo_por_uso(opciones, usos):
     return sorted(opciones, key=lambda nombre: (-usos.get(nombre, 0), nombre.lower()))
+
+
+def normalizar_nombre_activo(valor):
+    return " ".join(str(valor or "").strip().casefold().split())
+
+
+def filtrar_por_activo(df, inversion):
+    if df.empty or "inversion" not in df:
+        return df.copy()
+    clave = normalizar_nombre_activo(inversion)
+    mask = df["inversion"].apply(normalizar_nombre_activo) == clave
+    return df[mask].copy()
+
+
+def formato_unidades(valor):
+    if valor is None or pd.isna(valor):
+        return "-"
+    valor = float(valor or 0)
+    texto = f"{valor:.6f}".rstrip("0").rstrip(".")
+    return texto or "0"
+
+
+def unidades_firmadas(row):
+    unidades = row.get("unidades") if hasattr(row, "get") else None
+    if unidades is None or pd.isna(unidades):
+        return None
+    unidades = float(unidades or 0)
+    return unidades if row["tipo"] == "Compra" else -unidades
+
+
+def unidades_actuales_por_activo(df_ops, fecha=None):
+    posiciones = {}
+    if df_ops.empty:
+        return posiciones
+    ops = df_ops.copy()
+    if fecha is not None:
+        ops["_fecha_orden"] = pd.to_datetime(ops["fecha"], errors="coerce")
+        fecha_limite = pd.to_datetime(fecha, errors="coerce")
+        if not pd.isna(fecha_limite):
+            ops = ops[ops["_fecha_orden"] <= fecha_limite]
+    for _, row in ops.iterrows():
+        unidades = unidades_firmadas(row)
+        if unidades is None:
+            continue
+        clave = normalizar_nombre_activo(row["inversion"])
+        posiciones[clave] = posiciones.get(clave, 0.0) + unidades
+    return posiciones
+
+
+def operaciones_con_posicion(df_ops):
+    if df_ops.empty:
+        return df_ops.copy()
+    operaciones = df_ops.copy()
+    operaciones["_fecha_orden"] = pd.to_datetime(operaciones["fecha"], errors="coerce")
+    operaciones = operaciones.sort_values(["_fecha_orden", "id"], ascending=[True, True])
+    posicion = 0.0
+    tiene_posicion = False
+    posiciones = []
+    for _, row in operaciones.iterrows():
+        unidades = unidades_firmadas(row)
+        if unidades is not None:
+            posicion += unidades
+            tiene_posicion = True
+        posiciones.append(posicion if tiene_posicion else None)
+    operaciones["posicion_unidades"] = posiciones
+    return operaciones
+
+
+def render_asset_detail_metrics(df_asset, df_asset_ops, clave_activo):
+    if df_asset.empty:
+        return
+    ultimo = df_asset.sort_values(["fecha", "id"]).iloc[-1]
+    valor_actual = float(ultimo["valor_actual"] or 0)
+    valor_inicial = float(ultimo["dinero_inicial"] or 0)
+    balance = valor_actual - valor_inicial
+    balance_pct = (balance / valor_inicial * 100) if valor_inicial else 0.0
+    unidades = unidades_actuales_por_activo(df_asset_ops).get(clave_activo)
+    color_balance = color_por_signo(balance)
+
+    with ui.element("div").classes("asset-detail-metrics"):
+        with ui.element("div").classes("asset-detail-metric"):
+            ui.label("Valor actual").classes("asset-detail-metric-label")
+            ui.label(formato_euros_sin_signo(valor_actual)).classes("asset-detail-metric-value")
+        with ui.element("div").classes("asset-detail-metric"):
+            ui.label("Valor inicial").classes("asset-detail-metric-label")
+            ui.label(formato_euros_sin_signo(valor_inicial)).classes("asset-detail-metric-value")
+        with ui.element("div").classes("asset-detail-metric"):
+            ui.label("Balance").classes("asset-detail-metric-label")
+            ui.label(
+                f"{'+' if balance_pct > 0 else ''}{balance_pct:.2f}% ({formato_euros(balance)})"
+            ).classes(f"asset-detail-metric-value {color_balance}")
+        with ui.element("div").classes("asset-detail-metric"):
+            ui.label("Part./acciones").classes("asset-detail-metric-label")
+            ui.label(formato_unidades(unidades)).classes("asset-detail-metric-value")
 
 
 def ultimas_valoraciones(df_inv):
@@ -67,10 +271,19 @@ def render_resumen_inversiones(df_inv):
     ganancia_pct = (balance / dinero_inicial * 100) if dinero_inicial else 0.0
     color_ganancia = color_por_signo(balance)
 
+    def investment_metric_card(label, value, icon, value_color="text-gray-900", extra_class=""):
+        with ui.card().classes(f"metric-card investment-summary-card {extra_class}"):
+            ui.icon(icon).classes("investment-summary-icon")
+            ui.label(label).classes("metric-label")
+            ui.label(value).classes(f"metric-value {value_color}")
+
+    balance_class = "investment-summary-balance-positive" if balance >= 0 else "investment-summary-balance-negative"
+
     with ui.row().classes("w-full gap-4"):
-        metric_card("Valor total de las inversiones", formato_euros_sin_signo(valor_total))
-        metric_card("Dinero inicial invertido", formato_euros_sin_signo(dinero_inicial))
-        with ui.card().classes("metric-card"):
+        investment_metric_card("Valor total de las inversiones", formato_euros_sin_signo(valor_total), "account_balance_wallet")
+        investment_metric_card("Dinero inicial invertido", formato_euros_sin_signo(dinero_inicial), "track_changes")
+        with ui.card().classes(f"metric-card investment-summary-card {balance_class}"):
+            ui.icon("trending_up" if balance >= 0 else "trending_down").classes("investment-summary-icon")
             ui.label("Balance").classes("metric-label")
             with ui.row().classes("items-baseline gap-2"):
                 ui.label(f"{'+' if ganancia_pct > 0 else ''}{ganancia_pct:.2f}%").classes(
@@ -373,10 +586,19 @@ def open_investment_operation_dialog(df_inv, refresh, usuario, operacion=None):
 
         with ui.row().classes("w-full gap-3"):
             importe_input = ui.number(
-                "Importe compra/venta (€)",
+                "Importe (€)",
                 value=float(operacion["importe"]) if es_edicion else 0.0,
                 min=0,
                 step=1,
+            ).classes("flex-1")
+            unidades_valor = None
+            if es_edicion and "unidades" in operacion and not pd.isna(operacion["unidades"]):
+                unidades_valor = float(operacion["unidades"] or 0)
+            unidades_input = ui.number(
+                "Acciones/participaciones",
+                value=unidades_valor,
+                min=0,
+                step=0.000001,
             ).classes("flex-1")
             comisiones_input = ui.number(
                 "Comisiones (€)",
@@ -384,6 +606,28 @@ def open_investment_operation_dialog(df_inv, refresh, usuario, operacion=None):
                 min=0,
                 step=0.1,
             ).classes("flex-1")
+
+        precio_unitario_label = ui.label().classes("text-sm text-gray-600")
+
+        def sync_precio_unitario():
+            try:
+                importe = float(importe_input.value or 0)
+                unidades = float(unidades_input.value or 0)
+            except (TypeError, ValueError):
+                unidades = 0
+                importe = 0
+            if unidades > 0:
+                precio_unitario_label.set_text(
+                    f"Precio medio: {formato_euros_sin_signo(importe / unidades)} por acción/participación"
+                )
+            else:
+                precio_unitario_label.set_text(
+                    "Indica unidades si quieres seguir acciones/participaciones."
+                )
+
+        importe_input.on_value_change(lambda _: sync_precio_unitario())
+        unidades_input.on_value_change(lambda _: sync_precio_unitario())
+        sync_precio_unitario()
 
         def sync_asset_fields():
             es_nuevo = activo_select.value == opcion_nuevo
@@ -430,6 +674,7 @@ def open_investment_operation_dialog(df_inv, refresh, usuario, operacion=None):
                     "tipo_activo": tipo_activo,
                     "usuario": usuario,
                     "comisiones": comisiones_input.value,
+                    "unidades": unidades_input.value,
                 }
                 if es_edicion:
                     actualizar_operacion_inversion(int(operacion["id"]), **kwargs)
@@ -728,6 +973,84 @@ def open_investment_record_edit_dialog(row, refresh, usuario):
     dialog.open()
 
 
+def open_asset_detail_dialog(inversion, df_inv, refresh, usuario):
+    df_asset = filtrar_por_activo(df_inv, inversion)
+    df_asset_ops = operaciones_con_posicion(
+        filtrar_por_activo(cargar_datos("operaciones_inversion", usuario), inversion)
+    )
+    clave_activo = normalizar_nombre_activo(inversion)
+
+    with ui.dialog() as dialog, ui.card().classes("dialog-card asset-detail-dialog"):
+        with ui.row().classes("w-full items-center justify-between"):
+            with ui.column().classes("gap-0"):
+                ui.label(inversion).classes("text-2xl font-semibold")
+            ui.button(icon="close", on_click=dialog.close).props("flat round dense")
+
+        render_asset_detail_metrics(df_asset, df_asset_ops, clave_activo)
+
+        with ui.element("div").classes("asset-detail-body"):
+            if df_asset.empty:
+                ui.label("No hay registros de valoración para este activo.").classes("text-gray-500")
+            else:
+                evolucion = calcular_evolucion_activo_registrada(df_asset)
+                with ui.element("div").classes("asset-detail-top"):
+                    with ui.element("div").classes("asset-detail-chart-panel"):
+                        fig = build_investment_evolution_chart(
+                            evolucion,
+                            f"Evolución de {inversion}: Valor inicial vs. Valor actual",
+                        )
+                        ui.plotly(prepare_chart(fig, 500)).classes("plotly-chart asset-detail-plot")
+
+                    with ui.element("div").classes("asset-detail-values-panel"):
+                        with ui.element("div").classes("asset-detail-values-scroll"):
+                            with ui.element("div").classes("asset-detail-values-table"):
+                                ui.label("Fecha").classes("asset-detail-table-header")
+                                ui.label("Valor").classes("asset-detail-table-header")
+                                ui.label("Participaciones").classes("asset-detail-table-header")
+                                registros_tabla = evolucion.sort_values(
+                                    ["_fecha_orden", "_id_orden"],
+                                    ascending=[False, False],
+                                    na_position="last",
+                                )
+                                for _, row in registros_tabla.iterrows():
+                                    unidades_fecha = unidades_actuales_por_activo(
+                                        df_asset_ops, row["Fecha"]
+                                    ).get(clave_activo)
+                                    ui.label(row["Fecha"])
+                                    ui.label(formato_euros_sin_signo(float(row["Valor actual"] or 0))).classes(
+                                        "font-semibold"
+                                    )
+                                    ui.label(formato_unidades(unidades_fecha)).classes("font-semibold")
+
+            ui.label("Historial de operaciones").classes("section-title")
+            if df_asset_ops.empty:
+                ui.label("No hay operaciones registradas para este activo.").classes("text-gray-500")
+            else:
+                operaciones = df_asset_ops.sort_values(["fecha", "id"], ascending=[False, False])
+                with ui.element("div").classes("asset-detail-operations-scroll"):
+                    with ui.element("div").classes("asset-detail-operations-table"):
+                        for label in ["Fecha", "Tipo", "Unidades", "Posición", "Importe", "Comisiones", ""]:
+                            ui.label(label).classes("asset-detail-table-header")
+                        for _, row in operaciones.iterrows():
+                            ui.label(str(row["fecha"]))
+                            ui.label(row["tipo"]).classes(
+                                "font-semibold text-blue-700"
+                                if row["tipo"] == "Compra"
+                                else "font-semibold text-green-700"
+                            )
+                            ui.label(formato_unidades(row.get("unidades"))).classes("font-semibold")
+                            ui.label(formato_unidades(row.get("posicion_unidades"))).classes("font-semibold")
+                            ui.label(formato_euros_sin_signo(float(row["importe"] or 0)))
+                            ui.label(formato_euros_sin_signo(float(row["comisiones"] or 0)))
+                            ui.button(
+                                icon="edit",
+                                on_click=lambda row=row: open_investment_operation_dialog(
+                                    df_inv, refresh, usuario, row
+                                ),
+                            ).props("flat dense")
+    dialog.open()
+
+
 def render_inversiones(refresh, usuario):
     df_inv = cargar_datos("inversiones", usuario)
     df_ops = cargar_datos("operaciones_inversion", usuario)
@@ -740,7 +1063,7 @@ def render_inversiones(refresh, usuario):
         with ui.card().classes("table-card history-table-card"):
             with ui.element("div").classes("history-table-scroll"):
                 with ui.element("div").classes("table-header investment-ops-table"):
-                    for label in ["Fecha", "Tipo", "Activo", "Importe", "Comisiones", ""]:
+                    for label in ["Fecha", "Tipo", "Activo", "Unidades", "Importe", "Comisiones", ""]:
                         ui.label(label).classes("font-semibold")
                 for _, row in operaciones.iterrows():
                     with ui.element("div").classes("table-row investment-ops-table"):
@@ -749,6 +1072,7 @@ def render_inversiones(refresh, usuario):
                             "font-semibold text-blue-700" if row["tipo"] == "Compra" else "font-semibold text-green-700"
                         )
                         ui.label(row["inversion"])
+                        ui.label(formato_unidades(row.get("unidades"))).classes("font-semibold")
                         ui.label(formato_euros_sin_signo(float(row["importe"] or 0)))
                         ui.label(formato_euros_sin_signo(float(row["comisiones"] or 0)))
                         ui.button(
@@ -802,8 +1126,6 @@ def render_inversiones(refresh, usuario):
         dialog.open()
 
     ui.label("Seguimiento de Inversiones").classes("page-title")
-    render_resumen_inversiones(df_inv)
-
     with ui.row().classes("w-full items-center justify-between"):
         with ui.row().classes("gap-3"):
             ui.button(
@@ -828,6 +1150,8 @@ def render_inversiones(refresh, usuario):
             on_click=lambda: open_catalog_dialog(usuario),
         ).props("outline dense").classes("text-xs")
 
+    render_resumen_inversiones(df_inv)
+
     if df_inv.empty:
         ui.label("Aún no hay valoraciones registradas.").classes("text-gray-500")
     else:
@@ -836,65 +1160,9 @@ def render_inversiones(refresh, usuario):
                 ui.label("Evolución de la Cartera").classes("section-title")
                 evolucion = calcular_evolucion_inversiones(df_inv)
                 if not evolucion.empty:
-                    evolucion_hover = evolucion.copy()
-                    evolucion_hover["Valor inicial hover"] = evolucion_hover["Capital invertido"].apply(
-                        formato_euros_sin_signo
-                    )
-                    evolucion_hover["Valor actual hover"] = evolucion_hover["Valor actual"].apply(
-                        formato_euros_sin_signo
-                    )
-                    evolucion_hover["Rentabilidad hover"] = evolucion_hover["Diferencia (%)"].apply(
-                        lambda valor: (
-                            f"<span style='color:{'#15803d' if valor >= 0 else '#b91c1c'}'>"
-                            f"{'+' if valor > 0 else ''}{valor:.2f}%</span>"
-                        )
-                    )
-                    hover_data = evolucion_hover[
-                        ["Valor inicial hover", "Valor actual hover", "Rentabilidad hover"]
-                    ]
-
-                    fig = go.Figure()
-                    fig.add_trace(
-                        go.Scatter(
-                            x=evolucion_hover["Fecha"],
-                            y=evolucion_hover["Capital invertido"],
-                            mode="lines+markers",
-                            name="Valor inicial",
-                            line={"color": "#2563eb", "width": 2},
-                            marker={"size": 7},
-                            hoverinfo="none",
-                        )
-                    )
-                    fig.add_trace(
-                        go.Scatter(
-                            x=evolucion_hover["Fecha"],
-                            y=evolucion_hover["Valor actual"],
-                            mode="lines+markers",
-                            name="Valor actual",
-                            line={"color": "#15803d", "width": 2},
-                            marker={"size": 7},
-                            customdata=hover_data,
-                            hovertemplate=(
-                                "Valor inicial: %{customdata[0]}<br>"
-                                "Valor actual: %{customdata[1]}<br>"
-                                "Ganancia/pérdida: %{customdata[2]}"
-                                "<extra></extra>"
-                            ),
-                        )
-                    )
-                    fig.update_yaxes(ticksuffix="€")
-                    fig.update_xaxes(
-                        showspikes=True,
-                        spikecolor="#9ca3af",
-                        spikethickness=1,
-                        spikemode="across",
-                        spikesnap="data",
-                    )
-                    fig.update_layout(
-                        title="Evolución del Patrimonio: Capital Invertido vs. Valor Actual",
-                        legend_title_text="",
-                        hovermode="x unified",
-                        hoverlabel={"align": "left"},
+                    fig = build_investment_evolution_chart(
+                        evolucion,
+                        "Evolución del Patrimonio: Capital Invertido vs. Valor Actual",
                     )
                     ui.plotly(prepare_chart(fig, 420)).classes("plotly-chart")
 
@@ -910,6 +1178,7 @@ def render_inversiones(refresh, usuario):
                         values="Valor actual",
                         hole=0.45,
                         title="Peso real por valor de mercado actual",
+                        color_discrete_sequence=CHART_COLORS,
                     )
                     fig_tipos.update_traces(textposition="inside", textinfo="percent+label")
                     ui.plotly(prepare_chart(fig_tipos, 420)).classes("plotly-chart")
@@ -930,6 +1199,7 @@ def render_inversiones(refresh, usuario):
                         values="valor_actual",
                         names="inversion",
                         hole=0.4,
+                        color_discrete_sequence=CHART_COLORS,
                     )
                     ui.plotly(prepare_chart(fig_activos, 420)).classes("plotly-chart")
 
@@ -940,8 +1210,11 @@ def render_inversiones(refresh, usuario):
                 else:
                     with ui.element("div").classes("current-assets-scroll"):
                         with ui.element("div").classes("current-assets-table"):
-                            for label in ["Activo", "Balance", "Tipo"]:
-                                ui.label(label).classes("current-assets-table-header")
+                            for label in ["Activo", "Balance", "Últ. registro", "Tipo", ""]:
+                                header_classes = "current-assets-table-header"
+                                if label in {"Balance", "Últ. registro"}:
+                                    header_classes += " current-assets-number"
+                                ui.label(label).classes(header_classes)
                             for _, row in activos_actuales.iterrows():
                                 dinero_inicial = float(row["dinero_inicial"] or 0)
                                 valor_actual = float(row["valor_actual"] or 0)
@@ -950,11 +1223,22 @@ def render_inversiones(refresh, usuario):
                                     if dinero_inicial
                                     else 0.0
                                 )
-                                ui.label(row["inversion"])
-                                ui.label(f"{'+' if balance_pct > 0 else ''}{balance_pct:.2f}%").classes(
-                                    f"font-semibold {color_por_signo(balance_pct)}"
-                                )
-                                ui.label(row["tipo_activo"] or "Sin clasificar")
+                                with ui.element("div").classes("current-assets-row"):
+                                    ui.label(row["inversion"]).classes("current-assets-name")
+                                    ui.label(f"{'+' if balance_pct > 0 else ''}{balance_pct:.2f}%").classes(
+                                        f"current-assets-number font-semibold {color_por_signo(balance_pct)}"
+                                    )
+                                    ui.label(str(row["fecha"])).classes("current-assets-number font-semibold")
+                                    ui.label(row["tipo_activo"] or "Sin clasificar").classes("current-assets-badge")
+                                    with ui.element("div").classes("current-assets-action"):
+                                        chart_button = ui.button(
+                                            icon="show_chart",
+                                            on_click=lambda inversion=row["inversion"]: open_asset_detail_dialog(
+                                                inversion, df_inv, refresh, usuario
+                                            ),
+                                        ).props("flat round dense")
+                                        with chart_button:
+                                            ui.tooltip("Ver evolución del activo")
 
     with ui.row().classes("w-full justify-center"):
         ui.button("Historial", icon="history", on_click=open_history_dialog).props("outline")

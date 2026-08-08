@@ -39,8 +39,8 @@ def manifest():
         "scope": "/",
         "display": "standalone",
         "orientation": "portrait",
-        "background_color": "#f6f7fb",
-        "theme_color": "#2563eb",
+        "background_color": "#F8FAFC",
+        "theme_color": "#2563EB",
         "icons": [
             {
                 "src": "/static/icons/icon-192.png",
@@ -332,26 +332,87 @@ def main(tab: str = "saldo"):
         return
 
     username = username_actual()
+    user_initial = (username[:1] or "?").upper()
     with ui.column().classes("app-shell w-full"):
         with ui.row().classes("items-center justify-between w-full"):
-            ui.label("FinanzAPP").classes("text-3xl font-bold")
-            with ui.row().classes("items-center gap-3"):
-                ui.label(f"Usuario: {username}").classes("text-sm text-gray-500")
-                ui.button("Cerrar sesión / cambiar usuario", icon="logout", on_click=logout).props("outline dense")
+            with ui.row().classes("items-center gap-2"):
+                ui.html("""
+                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <g transform="skewX(-12) translate(8, 0)">
+                        <rect x="2" y="4" width="6" height="24" rx="1.5" fill="#1E293B"/>
+                        <rect x="10" y="4" width="16" height="6" rx="1.5" fill="#2563EB"/>
+                        <rect x="10" y="14" width="10" height="6" rx="1.5" fill="#10B981"/>
+                      </g>
+                    </svg>
+                """)
+                with ui.row().classes("gap-0 items-baseline text-xl"):
+                    ui.label("Finanz").classes("font-bold text-[#1E293B]")
+                    ui.label("APP").classes("font-medium text-[#2563EB]")
+            with ui.button(user_initial).props("round unelevated").style(
+                "background-color: #EFF6FF; color: #2563EB;"
+            ):
+                with ui.menu().classes("rounded-2xl p-2 min-w-[210px]") as user_menu:
+                    ui.label(username).classes("px-3 pt-2 pb-1 text-sm font-bold text-[#1E293B]")
+                    ui.separator().classes("my-1 bg-[#E2E8F0]")
 
-        with ui.tabs().classes("w-full") as tabs:
-            ui.tab("saldo", label="Saldo Global", icon="account_balance")
-            ui.tab("movimientos", label="Ingresos y Gastos", icon="receipt_long")
-            ui.tab("analisis", label="Análisis de gasto", icon="analytics")
-            ui.tab("inversiones", label="Inversiones", icon="trending_up")
+                    with ui.item(on_click=user_menu.close).classes("rounded-xl px-3 py-2 text-[#64748B]"):
+                        with ui.item_section().props("avatar"):
+                            ui.icon("settings").classes("text-[#64748B]")
+                        with ui.item_section():
+                            ui.label("Preferencias").classes("text-sm font-medium text-[#64748B]")
 
-        content = ui.column().classes("w-full")
+                    with ui.item(on_click=logout).classes("rounded-xl px-3 py-2 text-[#F43F5E]"):
+                        with ui.item_section().props("avatar"):
+                            ui.icon("logout").classes("text-[#F43F5E]")
+                        with ui.item_section():
+                            ui.label("Cerrar sesión").classes("text-sm font-medium text-[#F43F5E]")
+
+        nav_items = [
+            ("saldo", "Saldo Global", "account_balance"),
+            ("movimientos", "Ingresos y Gastos", "receipt_long"),
+            ("analisis", "Análisis de Gasto", "insert_chart"),
+            ("inversiones", "Inversiones", "trending_up"),
+        ]
+        tab_order = {key: index for index, (key, _, _) in enumerate(nav_items)}
+
+        content = None
         renderers = {}
+        active_tab = {"value": tab if tab in tab_order else "inversiones"}
 
-        def render_active_tab(tab_name):
+        def render_active_tab(tab_name, *, animate=False):
+            previous_tab = active_tab["value"]
+            active_tab["value"] = tab_name if tab_name in renderers else "saldo"
+            direction_class = ""
+            if animate and previous_tab != active_tab["value"]:
+                if tab_order[active_tab["value"]] > tab_order[previous_tab]:
+                    direction_class = "app-section-enter-from-right"
+                else:
+                    direction_class = "app-section-enter-from-left"
             content.clear()
             with content:
-                renderers.get(tab_name, renderers["saldo"])()
+                with ui.column().classes(f"app-section-frame {direction_class} w-full"):
+                    renderers.get(active_tab["value"], renderers["saldo"])()
+
+        @ui.refreshable
+        def render_navigation():
+            with ui.row().classes("app-pill-nav rounded-full bg-white shadow-lg"):
+                for key, label, icon in nav_items:
+                    is_active = active_tab["value"] == key
+                    item_classes = (
+                        "app-pill-nav-item app-pill-nav-item-active items-center justify-center rounded-full transition-all duration-300"
+                        if is_active
+                        else "app-pill-nav-item app-pill-nav-item-inactive items-center justify-center rounded-full transition-all duration-300"
+                    )
+
+                    def select_tab(tab_name=key):
+                        if tab_name == active_tab["value"]:
+                            return
+                        render_active_tab(tab_name, animate=True)
+                        render_navigation.refresh()
+
+                    with ui.column().classes(item_classes).on("click", select_tab):
+                        ui.icon(icon).classes("app-pill-nav-icon")
+                        ui.label(label).classes("app-pill-nav-label")
 
         renderers.update({
             "saldo": lambda: render_saldo_global(username),
@@ -360,10 +421,9 @@ def main(tab: str = "saldo"):
             "inversiones": lambda: render_inversiones(lambda: render_active_tab("inversiones"), username),
         })
 
-        initial_tab = tab if tab in renderers else "saldo"
-        tabs.on_value_change(lambda e: render_active_tab(e.value))
-        tabs.value = initial_tab
-        render_active_tab(initial_tab)
+        render_navigation()
+        content = ui.column().classes("app-section-viewport w-full")
+        render_active_tab(active_tab["value"])
         if app.storage.user.get("needs_initial_setup"):
             ui.timer(0.2, lambda: open_initial_setup_dialog(lambda: None), once=True)
 

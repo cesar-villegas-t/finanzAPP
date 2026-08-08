@@ -17,6 +17,7 @@ CATALOGOS_PERMITIDOS = {"brokers", "tipos_activo", "cuentas", "sectores"}
 TABLAS_PERMITIDAS = TABLAS_CON_USUARIO | CATALOGOS_PERMITIDOS
 TIPOS_OPERACION_INVERSION = {"Compra", "Venta"}
 IMPORTE_EPSILON = 0.005
+UNIDADES_EPSILON = 1e-9
 
 
 def _fecha_registro_actual():
@@ -329,7 +330,32 @@ def _importe_liquidez_operacion(tipo, importe, comisiones):
     return -(importe + comisiones) if tipo == "Compra" else importe - comisiones
 
 
-def _validar_operacion_inversion(fecha, tipo, inversion, importe, cuenta, aplicacion, tipo_activo, comisiones):
+def _normalizar_unidades(valor):
+    if valor in (None, "") or pd.isna(valor):
+        return None
+    unidades = abs(float(valor or 0))
+    if unidades <= 0:
+        raise ValueError("El numero de acciones/participaciones debe ser mayor que 0.")
+    return unidades
+
+
+def _precio_unitario_operacion(importe, unidades):
+    if unidades in (None, 0):
+        return None
+    return abs(float(importe or 0)) / float(unidades)
+
+
+def _validar_operacion_inversion(
+    fecha,
+    tipo,
+    inversion,
+    importe,
+    cuenta,
+    aplicacion,
+    tipo_activo,
+    comisiones,
+    unidades=None,
+):
     tipo = (tipo or "").strip()
     inversion = (inversion or "").strip()
     aplicacion = (aplicacion or "").strip()
@@ -345,7 +371,90 @@ def _validar_operacion_inversion(fecha, tipo, inversion, importe, cuenta, aplica
         raise ValueError("El importe debe ser mayor que 0.")
     if tipo == "Venta" and comisiones >= importe:
         raise ValueError("Las comisiones no pueden ser iguales o superiores al importe de venta.")
-    return fecha, tipo, inversion, importe, cuenta, aplicacion, tipo_activo, comisiones
+    unidades = _normalizar_unidades(unidades)
+    precio_unitario = _precio_unitario_operacion(importe, unidades)
+    return fecha, tipo, inversion, importe, cuenta, aplicacion, tipo_activo, comisiones, unidades, precio_unitario
+
+
+def _unidades_operaciones_hasta(conn, inversion, usuario, fecha=None, exclude_operacion_id=None):
+    params = [inversion, usuario]
+    fecha_filter = ""
+    if fecha is not None:
+        fecha_filter = " AND fecha <= ?"
+        params.append(fecha)
+    exclude_filter = ""
+    if exclude_operacion_id is not None:
+        exclude_filter = " AND id != ?"
+        params.append(exclude_operacion_id)
+    row = conn.execute(
+        f"""SELECT COALESCE(SUM(
+                    CASE
+                        WHEN tipo = 'Compra' THEN COALESCE(unidades, 0)
+                        WHEN tipo = 'Venta' THEN -COALESCE(unidades, 0)
+                        ELSE 0
+                    END
+                ), 0)
+            FROM operaciones_inversion
+            WHERE inversion = ?
+              AND usuario = ?
+              {fecha_filter}
+              {exclude_filter}""",
+        params,
+    ).fetchone()
+    return float(row[0] or 0)
+
+
+def _validar_venta_unidades(conn, fecha, tipo, inversion, unidades, usuario, exclude_operacion_id=None):
+    if tipo != "Venta" or unidades is None:
+        return
+    unidades_disponibles = _unidades_operaciones_hasta(
+        conn, inversion, usuario, fecha, exclude_operacion_id
+    )
+    if unidades > unidades_disponibles + UNIDADES_EPSILON:
+        raise ValueError(
+            f"No se pueden vender {unidades:.6g} acciones/participaciones de {inversion}: "
+            f"hay {unidades_disponibles:.6g} disponibles."
+        )
+
+
+def _validar_unidades_requeridas_si_activo_las_usa(conn, inversion, usuario, unidades):
+    if unidades is not None:
+        return
+    existe_unidades = conn.execute(
+        """SELECT 1
+           FROM operaciones_inversion
+           WHERE inversion = ?
+             AND usuario = ?
+             AND unidades IS NOT NULL
+           LIMIT 1""",
+        (inversion, usuario),
+    ).fetchone()
+    if existe_unidades:
+        raise ValueError(
+            f"Indica el numero de acciones/participaciones de {inversion}. "
+            "Este activo ya tiene operaciones con unidades registradas."
+        )
+
+
+def _validar_posicion_unidades_no_negativa(conn, inversion, usuario):
+    operaciones = conn.execute(
+        """SELECT fecha, id, tipo, unidades
+           FROM operaciones_inversion
+           WHERE inversion = ?
+             AND usuario = ?
+             AND unidades IS NOT NULL
+           ORDER BY fecha, id""",
+        (inversion, usuario),
+    ).fetchall()
+    posicion = 0.0
+    for fecha, _, tipo, unidades in operaciones:
+        unidades = float(unidades or 0)
+        posicion += unidades if tipo == "Compra" else -unidades
+        if posicion < -UNIDADES_EPSILON:
+            raise ValueError(
+                f"La posicion de {inversion} quedaria negativa el {fecha}. "
+                "Revisa las unidades de compras y ventas."
+            )
 
 
 def _validar_venta_activo_registrado(conn, fecha, tipo, inversion, importe, usuario):
@@ -544,8 +653,19 @@ def insertar_operacion_inversion(
     comisiones=0,
     notas="",
 ):
-    fecha, tipo, inversion, importe, cuenta, aplicacion, tipo_activo, comisiones = _validar_operacion_inversion(
-        fecha, tipo, inversion, importe, cuenta, aplicacion, tipo_activo, comisiones
+    (
+        fecha,
+        tipo,
+        inversion,
+        importe,
+        cuenta,
+        aplicacion,
+        tipo_activo,
+        comisiones,
+        unidades,
+        precio_unitario,
+    ) = _validar_operacion_inversion(
+        fecha, tipo, inversion, importe, cuenta, aplicacion, tipo_activo, comisiones, unidades
     )
     sector = "Inversiones"
     movimiento_liquidez = _importe_liquidez_operacion(tipo, importe, comisiones)
@@ -555,6 +675,8 @@ def insertar_operacion_inversion(
 
     with conectar_db() as conn:
         _validar_venta_activo_registrado(conn, fecha, tipo, inversion, importe, usuario)
+        _validar_unidades_requeridas_si_activo_las_usa(conn, inversion, usuario, unidades)
+        _validar_venta_unidades(conn, fecha, tipo, inversion, unidades, usuario)
         _ensure_catalogos_operacion(conn, cuenta, aplicacion, tipo_activo)
         conn.execute(
             """INSERT INTO activos (inversion, aplicacion, tipo_activo, usuario)
@@ -591,12 +713,12 @@ def insertar_operacion_inversion(
                 inversion,
                 tipo,
                 importe,
-                None,
-                None,
+                unidades,
+                precio_unitario,
                 comisiones,
                 cuenta,
                 transaccion_id,
-                "",
+                notas or "",
                 usuario,
             ),
         )
@@ -604,6 +726,7 @@ def insertar_operacion_inversion(
         if tipo == "Venta":
             _registrar_venta_en_historico(conn, operacion_id, fecha, inversion, importe, comisiones, usuario)
 
+        _validar_posicion_unidades_no_negativa(conn, inversion, usuario)
         _recalcular_capital_snapshots_desde(conn, inversion, usuario, fecha)
         conn.commit()
     return transaccion_id
@@ -620,9 +743,21 @@ def actualizar_operacion_inversion(
     tipo_activo,
     usuario,
     comisiones=0,
+    unidades=None,
 ):
-    fecha, tipo, inversion, importe, cuenta, aplicacion, tipo_activo, comisiones = _validar_operacion_inversion(
-        fecha, tipo, inversion, importe, cuenta, aplicacion, tipo_activo, comisiones
+    (
+        fecha,
+        tipo,
+        inversion,
+        importe,
+        cuenta,
+        aplicacion,
+        tipo_activo,
+        comisiones,
+        unidades,
+        precio_unitario,
+    ) = _validar_operacion_inversion(
+        fecha, tipo, inversion, importe, cuenta, aplicacion, tipo_activo, comisiones, unidades
     )
     with conectar_db() as conn:
         operacion = conn.execute(
@@ -637,6 +772,8 @@ def actualizar_operacion_inversion(
         fecha_anterior, inversion_anterior, tipo_anterior, transaccion_id = operacion
         restaurada = _restaurar_venta_historica(conn, operacion_id, usuario) if tipo_anterior == "Venta" else None
         _validar_venta_activo_registrado(conn, fecha, tipo, inversion, importe, usuario)
+        _validar_unidades_requeridas_si_activo_las_usa(conn, inversion, usuario, unidades)
+        _validar_venta_unidades(conn, fecha, tipo, inversion, unidades, usuario, operacion_id)
         _ensure_catalogos_operacion(conn, cuenta, aplicacion, tipo_activo)
         conn.execute(
             """INSERT INTO activos (inversion, aplicacion, tipo_activo, usuario)
@@ -652,14 +789,14 @@ def actualizar_operacion_inversion(
                    inversion = ?,
                    tipo = ?,
                    importe = ?,
-                   unidades = NULL,
-                   precio_unitario = NULL,
+                   unidades = ?,
+                   precio_unitario = ?,
                    comisiones = ?,
                    cuenta = ?,
                    notas = ''
                WHERE id = ?
                  AND usuario = ?""",
-            (fecha, inversion, tipo, importe, comisiones, cuenta, operacion_id, usuario),
+            (fecha, inversion, tipo, importe, unidades, precio_unitario, comisiones, cuenta, operacion_id, usuario),
         )
         movimiento_liquidez = _importe_liquidez_operacion(tipo, importe, comisiones)
         conn.execute(
@@ -690,10 +827,13 @@ def actualizar_operacion_inversion(
             fecha_recalculo = min(fecha_recalculo, str(restaurada[0]))
         if inversion_anterior != inversion:
             _recalcular_capital_snapshots_desde(conn, inversion_anterior, usuario, str(fecha_anterior))
+            _validar_posicion_unidades_no_negativa(conn, inversion_anterior, usuario)
             _delete_orphan_asset(conn, inversion_anterior, usuario)
         elif restaurada is not None and restaurada[1] != inversion:
             _recalcular_capital_snapshots_desde(conn, restaurada[1], usuario, str(restaurada[0]))
+            _validar_posicion_unidades_no_negativa(conn, restaurada[1], usuario)
             _delete_orphan_asset(conn, restaurada[1], usuario)
+        _validar_posicion_unidades_no_negativa(conn, inversion, usuario)
         _recalcular_capital_snapshots_desde(conn, inversion, usuario, fecha_recalculo)
         conn.commit()
 

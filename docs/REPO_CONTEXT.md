@@ -1,6 +1,6 @@
 # FinanzAPP Repository Context
 
-Last reviewed: 2026-08-03.
+Last reviewed: 2026-08-07.
 
 This file is the persistent project briefing for future chats. Read it before
 working on the repository, and keep it updated whenever important behavior,
@@ -231,10 +231,14 @@ Routes:
 - `/manifest.json`: PWA manifest.
 - `/service-worker.js`: simple app-shell cache.
 
+The authenticated header shows a circular user avatar with the user's initial.
+Its dropdown menu contains "Preferencias" as a placeholder and "Cerrar sesión"
+for the existing logout flow.
+
 Main tabs:
 
-- `saldo`: net worth summary, liquidity by account, investments pie, liquidity
-  over time and total net worth over time.
+- `saldo`: net worth summary, liquidity by account, investments pie, and
+  branded area charts for liquidity over time and total net worth over time.
 - `movimientos`: add income/expense, add account transfer, bulk import `.txt`,
   filters, edit/delete movements, edit accounts/sectors.
 - `analisis`: persisted date/sector filters, sector expense/income/balance
@@ -242,9 +246,18 @@ Main tabs:
 - `inversiones`: investment summary, register buy/sell operation, update market
   valuations, edit asset classification, edit brokers/types, review current
   allocation and current asset balances, and open a history modal with operation
-  and valuation histories.
+  and valuation histories. Each active asset row can open a large asset detail
+  modal with key metrics, its valuation chart, the charted valuation records and
+  that asset's buy/sell operation history. Investment operations can store
+  bought/sold units or shares, and active assets plus histories show known unit
+  positions.
   The valuation update dialog orders assets by broker, asset type and descending
   initial value, and shows the last registered value as a read-only reference.
+
+The main pill navigation preserves the spatial order of these tabs. Moving to a
+tab farther right makes the new section slide in from the right; moving back to a
+tab on the left makes it slide in from the left. Internal refreshes within the
+same section do not animate.
 
 New users get `needs_initial_setup=True` and see a three-step catalog setup for
 accounts, sectors and brokers. Choosing "Configurar mas adelante" applies the
@@ -361,6 +374,11 @@ Investments:
 - For `Compra`, liquidity movement is negative: `-(importe + comisiones)`.
 - For `Venta`, liquidity movement is positive: `importe - comisiones`.
 - Sale commissions must be lower than sale amount.
+- Buy/sell operations may include `unidades` (shares/participations). When units
+  are provided, `precio_unitario` is derived from `importe / unidades`; known
+  unit positions are tracked as purchases minus sales and cannot become negative.
+  Once any operation for an asset has units, all saved operations for that asset
+  must include units.
 - Broker (`aplicacion`) doubles as the liquidity `cuenta` for investment
   operations.
 - New operations and valuation inserts/upserts maintain `activos`; operations

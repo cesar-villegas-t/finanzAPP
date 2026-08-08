@@ -26,26 +26,26 @@ def formato_euros_sin_signo(valor):
 
 def color_por_signo(valor):
     if valor > 0:
-        return "text-green-700"
+        return "text-positive"
     if valor < 0:
-        return "text-red-700"
-    return "text-gray-900"
+        return "text-negative"
+    return "text-main"
 
 
 def color_hex_por_signo(valor):
     if valor > 0:
-        return "#15803d"
+        return "#10B981"
     if valor < 0:
-        return "#b91c1c"
-    return "#111827"
+        return "#F43F5E"
+    return "#1E293B"
 
 
 def color_por_tipo(tipo):
     if tipo == "Ingreso":
-        return "text-green-700"
+        return "text-positive"
     if tipo == "Gasto":
-        return "text-red-700"
-    return "text-blue-700"
+        return "text-negative"
+    return "text-primary"
 
 
 def actualizar_color_importe(input_element, valor=None):
