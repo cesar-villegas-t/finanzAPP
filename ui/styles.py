@@ -11,6 +11,8 @@ def add_styles():
     ui.add_head_html(
         """
         <link rel="manifest" href="/manifest.json">
+        <link rel="icon" type="image/svg+xml" href="/static/icons/favicon.svg">
+        <link rel="shortcut icon" type="image/svg+xml" href="/static/icons/favicon.svg">
         <meta name="theme-color" content="#2563EB">
         <meta name="mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-capable" content="yes">
@@ -136,6 +138,8 @@ def add_styles():
         .page-title { font-size: 28px; font-weight: 750; margin-bottom: 16px; }
         .section-title { font-size: 18px; font-weight: 700; margin: 16px 0 8px; }
         .metric-card {
+            position: relative;
+            overflow: hidden;
             min-width: 220px;
             flex: 1;
             border-radius: 16px;
@@ -145,6 +149,13 @@ def add_styles():
         }
         .metric-label { font-size: 13px; color: var(--color-text-muted); }
         .metric-value { font-size: 24px; font-weight: 760; }
+        .metric-card-icon {
+            position: absolute;
+            top: 14px;
+            right: 16px;
+            font-size: 28px;
+            opacity: 0.22;
+        }
         .investment-summary-card {
             position: relative;
             overflow: hidden;
@@ -174,6 +185,20 @@ def add_styles():
             border: 1px solid #E0ECFF;
             box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
         }
+        .analysis-chart-card {
+            width: 100%;
+            min-width: 0;
+            overflow: hidden;
+        }
+        .analysis-top-card {
+            height: 400px;
+            max-height: 400px;
+        }
+        .analysis-plotly {
+            width: 100%;
+            min-width: 0;
+            max-width: 100%;
+        }
         .plotly-chart { width: 100%; height: 420px; min-height: 420px; }
         .plotly-chart-tall { width: 100%; height: 520px; min-height: 520px; }
         .form-card, .table-card {
@@ -199,6 +224,31 @@ def add_styles():
         .transactions-table { grid-template-columns: 112px 96px minmax(200px, 1fr) 144px 160px 112px 96px; min-width: 1120px; }
         .investments-table { grid-template-columns: minmax(180px, 1fr) 144px repeat(4, 112px) 144px 96px; min-width: 1200px; }
         .investment-ops-table { grid-template-columns: 112px 96px minmax(220px, 1fr) 112px 112px 112px 96px; min-width: 960px; }
+        .sector-table > *:nth-child(2),
+        .sector-table > *:nth-child(3),
+        .sector-table > *:nth-child(4),
+        .transactions-table > *:nth-child(6),
+        .investments-table > *:nth-child(3),
+        .investments-table > *:nth-child(4),
+        .investments-table > *:nth-child(5),
+        .investments-table > *:nth-child(6),
+        .investment-ops-table > *:nth-child(4),
+        .investment-ops-table > *:nth-child(5),
+        .investment-ops-table > *:nth-child(6) {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+        .movements-scroll {
+            width: 100%;
+            min-width: 1120px;
+            max-height: 560px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            overscroll-behavior: contain;
+        }
+        .movement-loading-label {
+            padding: 8px 6px 2px;
+        }
         .current-assets-scroll {
             height: 420px;
             min-height: 420px;
@@ -383,6 +433,31 @@ def add_styles():
         .asset-detail-values-panel {
             min-width: 0;
         }
+        .asset-chart-tabs {
+            min-height: 38px;
+            box-shadow: none;
+        }
+        .asset-chart-tabs .q-tabs__content {
+            gap: 4px;
+        }
+        .asset-chart-tabs .q-tab {
+            min-height: 30px;
+            padding: 0 14px;
+            border-radius: 9999px;
+            color: #64748B;
+            font-weight: 700;
+        }
+        .asset-chart-tabs .q-tab--active {
+            background: #FFFFFF;
+            color: #1E293B;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+        }
+        .asset-chart-panels,
+        .asset-chart-tab-panel {
+            background: transparent;
+            padding: 0;
+            box-shadow: none;
+        }
         .asset-detail-plot {
             height: 500px;
             min-height: 500px;
@@ -431,6 +506,15 @@ def add_styles():
             text-overflow: ellipsis;
             white-space: nowrap;
         }
+        .asset-detail-values-table > *:nth-child(3n + 2),
+        .asset-detail-values-table > *:nth-child(3n + 3),
+        .asset-detail-operations-table > *:nth-child(7n + 3),
+        .asset-detail-operations-table > *:nth-child(7n + 4),
+        .asset-detail-operations-table > *:nth-child(7n + 5),
+        .asset-detail-operations-table > *:nth-child(7n + 6) {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
         .asset-detail-table-header {
             color: var(--color-text-muted);
             font-weight: 700;
@@ -460,6 +544,21 @@ def add_styles():
         .asset-edit-row > *,
         .asset-edit-row .q-field,
         .asset-edit-row .q-field__inner { width: 100%; min-width: 0; }
+        .investment-entry-row > .investment-entry-cell:nth-child(5),
+        .investment-entry-row > .investment-entry-cell:nth-child(6),
+        .investment-entry-row > .investment-entry-cell:nth-child(7) {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+        .investment-entry-row > .investment-entry-cell:nth-child(5) .q-field__native,
+        .investment-entry-row > .investment-entry-cell:nth-child(6) .q-field__native,
+        .investment-entry-row > .investment-entry-cell:nth-child(7) .q-field__native,
+        .investment-entry-row > .investment-entry-cell:nth-child(5) .q-field__suffix,
+        .investment-entry-row > .investment-entry-cell:nth-child(6) .q-field__suffix,
+        .investment-entry-row > .investment-entry-cell:nth-child(7) .q-field__suffix {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
         .investment-entry-header .investment-entry-cell,
         .investment-entry-text-cell { padding-left: 12px; padding-right: 12px; }
         .investment-entry-text-cell,

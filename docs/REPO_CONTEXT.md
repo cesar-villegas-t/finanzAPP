@@ -46,7 +46,7 @@ server-side and view modules call `db.queries` directly.
 - `ui/views/transactions.py`: "Ingresos y Gastos" tab.
 - `ui/views/analysis.py`: "Analisis de gasto" tab.
 - `ui/views/investments.py`: "Inversiones" tab.
-- `static/icons/`: PWA icons.
+- `static/icons/`: PWA icons and the SVG browser favicon.
 - `private/`: local auth, SQLite DBs, backups and NiceGUI storage. Ignored by
   Git and should be treated as sensitive local data.
 - `fa/`: existing local virtual environment. Exclude it from code searches.
@@ -208,7 +208,8 @@ task explicitly requires it.
 2. Ensures private directories exist.
 3. Configures NiceGUI `Storage.secret` and `Storage.path`.
 4. Serves `/static`.
-5. Defines PWA `/manifest.json` and `/service-worker.js`.
+5. Defines PWA `/manifest.json` and `/service-worker.js`; the global head and
+   `ui.run(favicon=...)` use `/static/icons/favicon.svg` as the browser favicon.
 6. On direct execution, calls `init_db()` then `ui.run(...)`.
 
 `init_db()`:
@@ -240,17 +241,19 @@ Main tabs:
 - `saldo`: net worth summary, liquidity by account, investments pie, and
   branded area charts for liquidity over time and total net worth over time.
 - `movimientos`: add income/expense, add account transfer, bulk import `.txt`,
-  filters, edit/delete movements, edit accounts/sectors.
+  filters, edit/delete movements, edit accounts/sectors. The movements table
+  uses SQL pagination and incremental rendering in 50-row batches as the user
+  scrolls.
 - `analisis`: persisted date/sector filters, sector expense/income/balance
   summary, breakdown dialog and charts.
 - `inversiones`: investment summary, register buy/sell operation, update market
   valuations, edit asset classification, edit brokers/types, review current
   allocation and current asset balances, and open a history modal with operation
   and valuation histories. Each active asset row can open a large asset detail
-  modal with key metrics, its valuation chart, the charted valuation records and
-  that asset's buy/sell operation history. Investment operations can store
-  bought/sold units or shares, and active assets plus histories show known unit
-  positions.
+  modal with key metrics, a segmented chart selector for position versus unit
+  price, the charted valuation records and that asset's buy/sell operation
+  history. Investment operations store bought/sold units or shares, and active
+  assets plus histories show known unit positions.
   The valuation update dialog orders assets by broker, asset type and descending
   initial value, and shows the last registered value as a read-only reference.
 
@@ -258,6 +261,11 @@ The main pill navigation preserves the spatial order of these tabs. Moving to a
 tab farther right makes the new section slide in from the right; moving back to a
 tab on the left makes it slide in from the left. Internal refreshes within the
 same section do not animate.
+
+Visible numeric formatting uses Spanish separators across the app: `.` for
+thousands and `,` for decimals. This is presentation-only; numeric inputs,
+database values and import files still use the standard numeric values expected
+by Python/browser controls.
 
 New users get `needs_initial_setup=True` and see a three-step catalog setup for
 accounts, sectors and brokers. Choosing "Configurar mas adelante" applies the
@@ -296,6 +304,10 @@ Tables:
   `tipo_activo`, `usuario`, primary key `(inversion, usuario)`.
 - `preferencias_usuario`: JSON preferences by `(usuario, clave)`.
 
+Supporting indexes include transaction indexes by `(usuario, fecha, id)`,
+`(usuario, fecha_registro, id)`, `(usuario, importe, id)` and
+`(usuario, tipo, cuenta, sector)` for paginated movement browsing and filters.
+
 `fecha_registro` triggers fill missing values with local date on inserts for
 `transacciones` and `operaciones_inversion`. The Python insert helpers usually
 set it explicitly to `date.today().isoformat()`.
@@ -326,6 +338,9 @@ Transactions:
   inputs.
 - Transactions linked to investment operations cannot be edited or deleted from
   the normal transaction edit dialog.
+- The movements list queries SQLite directly for count, sum, filters and
+  50-row pages; it no longer loads all transaction rows into Pandas before
+  rendering the table.
 
 Transfers:
 
@@ -374,11 +389,9 @@ Investments:
 - For `Compra`, liquidity movement is negative: `-(importe + comisiones)`.
 - For `Venta`, liquidity movement is positive: `importe - comisiones`.
 - Sale commissions must be lower than sale amount.
-- Buy/sell operations may include `unidades` (shares/participations). When units
-  are provided, `precio_unitario` is derived from `importe / unidades`; known
-  unit positions are tracked as purchases minus sales and cannot become negative.
-  Once any operation for an asset has units, all saved operations for that asset
-  must include units.
+- Buy/sell operations must include `unidades` (shares/participations).
+  `precio_unitario` is derived from `importe / unidades`; known unit positions
+  are tracked as purchases minus sales and cannot become negative.
 - Broker (`aplicacion`) doubles as the liquidity `cuenta` for investment
   operations.
 - New operations and valuation inserts/upserts maintain `activos`; operations

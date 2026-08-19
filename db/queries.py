@@ -1,5 +1,5 @@
 import json
-from datetime import date
+from datetime import date, timedelta
 
 import pandas as pd
 
@@ -16,12 +16,26 @@ TABLAS_CON_USUARIO = {
 CATALOGOS_PERMITIDOS = {"brokers", "tipos_activo", "cuentas", "sectores"}
 TABLAS_PERMITIDAS = TABLAS_CON_USUARIO | CATALOGOS_PERMITIDOS
 TIPOS_OPERACION_INVERSION = {"Compra", "Venta"}
+TIPOS_MOVIMIENTO = {"Ingreso", "Gasto", "Traspaso"}
+COLUMNAS_FILTRO_MOVIMIENTOS = {"cuenta", "sector"}
+ORDEN_MOVIMIENTOS_SQL = {
+    "Fecha": "fecha",
+    "Fecha de registro": "COALESCE(NULLIF(fecha_registro, ''), fecha)",
+    "Importe": "importe",
+}
 IMPORTE_EPSILON = 0.005
 UNIDADES_EPSILON = 1e-9
 
 
 def _fecha_registro_actual():
     return date.today().isoformat()
+
+
+def _formato_numero_es(valor, decimales=2, sufijo="", trim_zeros=False):
+    texto = format(float(valor or 0), f",.{decimales}f").replace(",", "_").replace(".", ",").replace("_", ".")
+    if trim_zeros and "," in texto:
+        texto = texto.rstrip("0").rstrip(",")
+    return f"{texto}{sufijo}"
 
 
 def ejecutar_query(query, params=()):
@@ -67,6 +81,166 @@ def cargar_datos(tabla, usuario=None):
         if tabla in TABLAS_CON_USUARIO and usuario is not None:
             return pd.read_sql(f"SELECT * FROM {tabla} WHERE usuario = ?", conn, params=(usuario,))
         return pd.read_sql(f"SELECT * FROM {tabla}", conn)
+
+
+def _normalizar_filtros_movimientos(filtros):
+    filtros = filtros or {}
+    tipos = [tipo for tipo in filtros.get("tipos", []) if tipo in TIPOS_MOVIMIENTO]
+    cuentas = [str(cuenta).strip() for cuenta in filtros.get("cuentas", []) if str(cuenta or "").strip()]
+    sectores = [str(sector).strip() for sector in filtros.get("sectores", []) if str(sector or "").strip()]
+    orden = filtros.get("orden") if filtros.get("orden") in ORDEN_MOVIMIENTOS_SQL else "Fecha"
+    direccion = "ASC" if filtros.get("direccion") == "Ascendente" else "DESC"
+    return {
+        "tipos": tipos or list(TIPOS_MOVIMIENTO),
+        "cuentas": cuentas,
+        "sectores": sectores,
+        "orden": orden,
+        "direccion": direccion,
+    }
+
+
+def _where_movimientos(usuario, filtros):
+    filtros = _normalizar_filtros_movimientos(filtros)
+    clauses = ["usuario = ?"]
+    params = [usuario]
+    for columna, valores in (("tipo", filtros["tipos"]), ("cuenta", filtros["cuentas"]), ("sector", filtros["sectores"])):
+        if valores:
+            placeholders = ", ".join("?" for _ in valores)
+            clauses.append(f"{columna} IN ({placeholders})")
+            params.extend(valores)
+    return " AND ".join(clauses), params, filtros
+
+
+def consultar_movimientos(usuario, filtros, limit=50, offset=0):
+    where_sql, params, filtros = _where_movimientos(usuario, filtros)
+    limit = max(1, int(limit or 50))
+    offset = max(0, int(offset or 0))
+    orden_sql = ORDEN_MOVIMIENTOS_SQL[filtros["orden"]]
+    direccion = filtros["direccion"]
+    query = f"""SELECT *
+                FROM transacciones
+                WHERE {where_sql}
+                ORDER BY {orden_sql} {direccion}, id {direccion}
+                LIMIT ? OFFSET ?"""
+    with conectar_db() as conn:
+        return pd.read_sql(query, conn, params=(*params, limit, offset))
+
+
+def resumen_movimientos(usuario, filtros):
+    where_sql, params, _ = _where_movimientos(usuario, filtros)
+    with conectar_db() as conn:
+        row = conn.execute(
+            f"""SELECT COUNT(*), COALESCE(SUM(importe), 0)
+                FROM transacciones
+                WHERE {where_sql}""",
+            params,
+        ).fetchone()
+    return int(row[0] or 0), float(row[1] or 0)
+
+
+def opciones_filtro_movimientos(usuario, columna):
+    if columna not in COLUMNAS_FILTRO_MOVIMIENTOS:
+        raise ValueError("Columna de filtro no valida.")
+    with conectar_db() as conn:
+        rows = conn.execute(
+            f"""SELECT DISTINCT {columna}
+                FROM transacciones
+                WHERE usuario = ?
+                  AND {columna} IS NOT NULL
+                  AND TRIM({columna}) != ''""",
+            (usuario,),
+        ).fetchall()
+    return sorted({row[0].strip() for row in rows if row[0]}, key=str.lower)
+
+
+def opciones_recientes_movimientos(usuario, columna, opciones_base, opcion_otro, excluir_tipos=None):
+    if columna not in COLUMNAS_FILTRO_MOVIMIENTOS:
+        raise ValueError("Columna de opciones no valida.")
+
+    opciones = []
+    vistos = set()
+    for opcion in opciones_base:
+        opcion = (opcion or "").strip()
+        clave = opcion.lower()
+        if opcion and clave not in vistos and opcion != opcion_otro:
+            opciones.append(opcion)
+            vistos.add(clave)
+
+    exclude = [tipo for tipo in (excluir_tipos or []) if tipo in TIPOS_MOVIMIENTO]
+    exclude_sql = ""
+    exclude_params = []
+    if exclude:
+        exclude_sql = f" AND tipo NOT IN ({', '.join('?' for _ in exclude)})"
+        exclude_params = exclude
+
+    fecha_minima = (date.today() - timedelta(days=60)).isoformat()
+    with conectar_db() as conn:
+        historicos = conn.execute(
+            f"""SELECT DISTINCT {columna}
+                FROM transacciones
+                WHERE usuario = ?
+                  AND {columna} IS NOT NULL
+                  AND TRIM({columna}) != ''
+                  {exclude_sql}""",
+            (usuario, *exclude_params),
+        ).fetchall()
+        recientes = conn.execute(
+            f"""SELECT {columna}, COUNT(*) AS total
+                FROM transacciones
+                WHERE usuario = ?
+                  AND fecha >= ?
+                  AND {columna} IS NOT NULL
+                  AND TRIM({columna}) != ''
+                  {exclude_sql}
+                GROUP BY {columna}""",
+            (usuario, fecha_minima, *exclude_params),
+        ).fetchall()
+
+    for row in historicos:
+        valor = (row[0] or "").strip()
+        clave = valor.lower()
+        if valor and clave not in vistos and valor != opcion_otro:
+            opciones.append(valor)
+            vistos.add(clave)
+    counts = {(row[0] or "").strip(): int(row[1] or 0) for row in recientes}
+    opciones = sorted(opciones, key=lambda nombre: (-counts.get(nombre, 0), nombre.lower()))
+    opciones.append(opcion_otro)
+    return opciones
+
+
+def ultimo_traspaso_entre_cuentas_usuario(usuario):
+    with conectar_db() as conn:
+        rows = conn.execute(
+            """SELECT fecha, id, descripcion, cuenta, importe
+               FROM transacciones
+               WHERE usuario = ?
+                 AND tipo = 'Traspaso'
+               ORDER BY fecha DESC, id DESC
+               LIMIT 200""",
+            (usuario,),
+        ).fetchall()
+    if not rows:
+        return None, None
+
+    salidas = [row for row in rows if float(row[4] or 0) < 0]
+    for salida in salidas:
+        descripcion = str(salida[2] or "")
+        base = descripcion.removesuffix(" - salida")
+        for entrada in rows:
+            if (
+                entrada[0] == salida[0]
+                and float(entrada[4] or 0) > 0
+                and str(entrada[2] or "") in {f"{base} - entrada", base}
+            ):
+                return salida[3], entrada[3]
+
+    fecha_ultima = rows[0][0]
+    mismo_dia = [row for row in rows if row[0] == fecha_ultima]
+    salida = next((row for row in mismo_dia if float(row[4] or 0) < 0), None)
+    entrada = next((row for row in mismo_dia if float(row[4] or 0) > 0), None)
+    if salida and entrada:
+        return salida[3], entrada[3]
+    return None, None
 
 
 def insertar_transaccion(fecha, tipo, descripcion, cuenta, sector, importe, usuario):
@@ -332,7 +506,7 @@ def _importe_liquidez_operacion(tipo, importe, comisiones):
 
 def _normalizar_unidades(valor):
     if valor in (None, "") or pd.isna(valor):
-        return None
+        raise ValueError("Indica el numero de acciones/participaciones.")
     unidades = abs(float(valor or 0))
     if unidades <= 0:
         raise ValueError("El numero de acciones/participaciones debe ser mayor que 0.")
@@ -412,8 +586,9 @@ def _validar_venta_unidades(conn, fecha, tipo, inversion, unidades, usuario, exc
     )
     if unidades > unidades_disponibles + UNIDADES_EPSILON:
         raise ValueError(
-            f"No se pueden vender {unidades:.6g} acciones/participaciones de {inversion}: "
-            f"hay {unidades_disponibles:.6g} disponibles."
+            f"No se pueden vender {_formato_numero_es(unidades, 6, trim_zeros=True)} "
+            f"acciones/participaciones de {inversion}: "
+            f"hay {_formato_numero_es(unidades_disponibles, 6, trim_zeros=True)} disponibles."
         )
 
 
@@ -479,8 +654,8 @@ def _validar_venta_activo_registrado(conn, fecha, tipo, inversion, importe, usua
     ultimo_valor = float(snapshot[2] or 0)
     if importe > ultimo_valor:
         raise ValueError(
-            f"No se puede vender {importe:.2f} EUR de {inversion}: "
-            f"su ultimo valor registrado es {ultimo_valor:.2f} EUR."
+            f"No se puede vender {_formato_numero_es(importe, sufijo=' EUR')} de {inversion}: "
+            f"su ultimo valor registrado es {_formato_numero_es(ultimo_valor, sufijo=' EUR')}."
         )
 
 
@@ -533,8 +708,8 @@ def _registrar_venta_en_historico(conn, operacion_id, fecha, inversion, importe,
         raise ValueError("No se puede vender un activo con valor actual 0.")
     if importe > valor_actual:
         raise ValueError(
-            f"No se puede vender {importe:.2f} EUR de {inversion}: "
-            f"su ultimo valor registrado es {valor_actual:.2f} EUR."
+            f"No se puede vender {_formato_numero_es(importe, sufijo=' EUR')} de {inversion}: "
+            f"su ultimo valor registrado es {_formato_numero_es(valor_actual, sufijo=' EUR')}."
         )
 
     proporcion_vendida = min(1.0, importe / valor_actual)

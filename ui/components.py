@@ -1,3 +1,4 @@
+import math
 import sqlite3
 
 from nicegui import ui
@@ -15,13 +16,34 @@ from db.queries import (
 from services.analytics import filtrar_transacciones, opciones_con_historial
 
 
+def formato_numero(valor, decimales=2, signed=False, sufijo="", trim_zeros=False):
+    try:
+        numero = float(valor)
+    except (TypeError, ValueError):
+        return "-"
+    if math.isnan(numero):
+        return "-"
+    formato = f"{'+' if signed and numero > 0 else ''},.{decimales}f"
+    texto = format(numero, formato).replace(",", "_").replace(".", ",").replace("_", ".")
+    if trim_zeros and "," in texto:
+        texto = texto.rstrip("0").rstrip(",")
+    return f"{texto}{sufijo}"
+
+
 def formato_euros(valor):
-    signo = "+" if valor > 0 else ""
-    return f"{signo}{valor:.2f}€"
+    return formato_numero(valor, signed=True, sufijo="€")
 
 
 def formato_euros_sin_signo(valor):
-    return f"{valor:.2f}€"
+    return formato_numero(valor, sufijo="€")
+
+
+def formato_porcentaje(valor, decimales=2, signed=False):
+    return formato_numero(valor, decimales=decimales, signed=signed, sufijo="%")
+
+
+def formato_unidades(valor, decimales=6):
+    return formato_numero(valor, decimales=decimales, trim_zeros=True)
 
 
 def color_por_signo(valor):
@@ -61,8 +83,13 @@ def actualizar_color_importe(input_element, valor=None):
         input_element.classes(add="amount-negative")
 
 
-def metric_card(label, value, color="text-gray-900"):
-    with ui.card().classes("metric-card"):
+def metric_card(label, value, color="text-gray-900", icon=None, bg_color=None):
+    classes = "metric-card"
+    if bg_color:
+        classes = f"{classes} {bg_color}"
+    with ui.card().classes(classes):
+        if icon:
+            ui.icon(icon).classes(f"metric-card-icon {color}")
         ui.label(label).classes("metric-label")
         ui.label(value).classes(f"metric-value {color}")
 
@@ -201,7 +228,7 @@ def open_edit_transaction_dialog(row, refresh, usuario):
         df_tx, "sector", cargar_catalogo("sectores"), "Otro"
     )
 
-    with ui.dialog() as dialog, ui.card().classes("dialog-card wide-dialog"):
+    with ui.dialog() as dialog, ui.card().classes("dialog-card wide-dialog rounded-2xl"):
         ui.label("Editar movimiento").classes("text-xl font-semibold")
         fecha_input = ui.input("Fecha", value=str(row["fecha"])).props("type=date").classes("w-full")
         importe_input = ui.number(

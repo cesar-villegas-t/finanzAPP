@@ -5,7 +5,13 @@ from nicegui import ui
 
 from db.queries import cargar_datos
 from services.analytics import calcular_liquidez_por_fecha, calcular_patrimonio_total_por_fecha
-from ui.components import color_por_signo, formato_euros_sin_signo, metric_card
+from ui.components import (
+    color_por_signo,
+    formato_euros_sin_signo,
+    formato_numero,
+    formato_porcentaje,
+    metric_card,
+)
 
 
 COLOR_PRIMARY = "#2563EB"
@@ -20,13 +26,13 @@ def prepare_chart(fig, height=420):
         autosize=True,
         height=height,
         margin={"l": 24, "r": 24, "t": 48, "b": 24},
+        separators=",.",
     )
     return fig
 
 
 def formato_euros_hover(valor):
-    formatted = f"{valor:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
-    return f"{formatted} " + "\u20ac"
+    return formato_numero(valor, sufijo=" €")
 
 
 def rgba_from_hex(color, opacity):
@@ -116,7 +122,7 @@ def render_saldo_global(usuario):
             with ui.row().classes("items-baseline gap-2"):
                 ui.label(formato_euros_sin_signo(valor_inversiones)).classes("metric-value")
                 ui.label(
-                    f"{'+' if balance_inversiones_pct > 0 else ''}{balance_inversiones_pct:.2f}%"
+                    formato_porcentaje(balance_inversiones_pct, signed=True)
                 ).classes(f"text-sm font-semibold {color_por_signo(balance_inversiones_pct)}")
 
     with ui.row().classes("w-full gap-4 items-stretch"):

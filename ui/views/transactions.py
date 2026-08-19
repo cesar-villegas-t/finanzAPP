@@ -4,19 +4,23 @@ from nicegui import app, ui
 
 from db.queries import (
     cargar_catalogo,
-    cargar_datos,
+    consultar_movimientos,
     existe_transaccion,
     insertar_transaccion,
     insertar_transacciones_masivas,
     insertar_traspaso,
+    opciones_filtro_movimientos,
+    opciones_recientes_movimientos,
+    resumen_movimientos,
+    ultimo_traspaso_entre_cuentas_usuario,
 )
 from services.bulk_transactions import BulkImportError, EXPECTED_HEADER, parse_bulk_transactions_txt
-from services.analytics import opciones_por_uso_reciente, ultimo_traspaso_entre_cuentas
 from ui.components import (
     actualizar_color_importe,
     color_por_tipo,
     euro_label,
     formato_euros,
+    formato_euros_sin_signo,
     open_catalog_editor_dialog,
     open_duplicate_dialog,
     open_edit_transaction_dialog,
@@ -119,11 +123,9 @@ def open_bulk_import_dialog(refresh, usuario):
 
 
 def render_ingresos_gastos(refresh, usuario):
-    df_tx = cargar_datos("transacciones", usuario)
-    if "fecha_registro" not in df_tx.columns:
-        df_tx["fecha_registro"] = df_tx["fecha"] if "fecha" in df_tx.columns else None
     ui.label("Registro de Transacciones").classes("page-title")
     form_mode = {"value": "operacion"}
+    batch_size = 50
     filtros = {
         "tipos": TIPOS_MOVIMIENTO.copy(),
         "cuentas": [],
@@ -147,41 +149,15 @@ def render_ingresos_gastos(refresh, usuario):
         }
 
     def opciones_filtro(columna):
-        if df_tx.empty or columna not in df_tx.columns:
-            return []
-        valores = df_tx[columna].dropna().astype(str).str.strip()
-        return sorted({valor for valor in valores if valor}, key=str.lower)
+        return opciones_filtro_movimientos(usuario, columna)
 
-    def aplicar_filtros_movimientos():
-        movimientos = df_tx.copy()
-        if movimientos.empty:
-            return movimientos
-
-        if "fecha_registro" not in movimientos.columns:
-            movimientos["fecha_registro"] = movimientos["fecha"]
-        movimientos["fecha_registro"] = movimientos["fecha_registro"].fillna(movimientos["fecha"])
-
-        if filtros["tipos"]:
-            movimientos = movimientos[movimientos["tipo"].isin(filtros["tipos"])]
-        if filtros["cuentas"]:
-            movimientos = movimientos[movimientos["cuenta"].isin(filtros["cuentas"])]
-        if filtros["sectores"]:
-            movimientos = movimientos[movimientos["sector"].isin(filtros["sectores"])]
-
-        columna_orden = ORDEN_MOVIMIENTOS[filtros["orden"]]
-        ascendente = filtros["direccion"] == "Ascendente"
-        if columna_orden in {"fecha", "fecha_registro"}:
-            movimientos = movimientos.assign(
-                _orden_fecha=movimientos[columna_orden].fillna(movimientos["fecha"])
-            )
-            return movimientos.sort_values(
-                ["_orden_fecha", "id"],
-                ascending=[ascendente, ascendente],
-            ).drop(columns=["_orden_fecha"])
-
-        return movimientos.sort_values(
-            [columna_orden, "id"],
-            ascending=[ascendente, ascendente],
+    def filtros_predeterminados():
+        return (
+            filtros["tipos"] == TIPOS_MOVIMIENTO
+            and not filtros["cuentas"]
+            and not filtros["sectores"]
+            and filtros["orden"] == "Fecha"
+            and filtros["direccion"] == "Descendente"
         )
 
     def resumen_filtros():
@@ -275,9 +251,19 @@ def render_ingresos_gastos(refresh, usuario):
     with ui.card().classes("form-card"):
         @ui.refreshable
         def render_form():
-            opciones_cuenta = opciones_por_uso_reciente(df_tx, "cuenta", cargar_catalogo("cuentas"), "Otra")
-            df_tx_operaciones = df_tx[df_tx["tipo"] != "Traspaso"] if not df_tx.empty else df_tx
-            opciones_sector = opciones_por_uso_reciente(df_tx_operaciones, "sector", cargar_catalogo("sectores"), "Otro")
+            opciones_cuenta = opciones_recientes_movimientos(
+                usuario,
+                "cuenta",
+                cargar_catalogo("cuentas"),
+                "Otra",
+            )
+            opciones_sector = opciones_recientes_movimientos(
+                usuario,
+                "sector",
+                cargar_catalogo("sectores"),
+                "Otro",
+                excluir_tipos=["Traspaso"],
+            )
             ultimo_form = ultima_operacion_form()
 
             def actualizar_select(select, opciones):
@@ -290,7 +276,7 @@ def render_ingresos_gastos(refresh, usuario):
             if form_mode["value"] == "traspaso":
                 ui.label("Traspaso entre cuentas").classes("section-title")
                 fecha_input = ui.input("Fecha", value=date.today().isoformat()).props("type=date").classes("w-48")
-                ultima_cuenta_origen, ultima_cuenta_destino = ultimo_traspaso_entre_cuentas(df_tx)
+                ultima_cuenta_origen, ultima_cuenta_destino = ultimo_traspaso_entre_cuentas_usuario(usuario)
                 cuenta_origen_default = (
                     ultima_cuenta_origen if ultima_cuenta_origen in opciones_cuenta else opciones_cuenta[0]
                 )
@@ -333,7 +319,12 @@ def render_ingresos_gastos(refresh, usuario):
                 )
 
                 def refresh_transfer_account_options():
-                    nuevas_opciones = opciones_por_uso_reciente(df_tx, "cuenta", cargar_catalogo("cuentas"), "Otra")
+                    nuevas_opciones = opciones_recientes_movimientos(
+                        usuario,
+                        "cuenta",
+                        cargar_catalogo("cuentas"),
+                        "Otra",
+                    )
                     actualizar_select(cuenta_origen_select, nuevas_opciones)
                     actualizar_select(cuenta_destino_select, nuevas_opciones)
                     nueva_cuenta_origen.set_visibility(cuenta_origen_select.value == "Otra")
@@ -368,7 +359,7 @@ def render_ingresos_gastos(refresh, usuario):
                         importe,
                         usuario,
                     )
-                    refresh_view(refresh, f"Traspaso de {importe:.2f}€ registrado correctamente.")
+                    refresh_view(refresh, f"Traspaso de {formato_euros_sin_signo(importe)} registrado correctamente.")
 
                 def show_operation_form():
                     form_mode["value"] = "operacion"
@@ -442,16 +433,22 @@ def render_ingresos_gastos(refresh, usuario):
             sector_select.on_value_change(lambda e: nuevo_sector.set_visibility(e.value == "Otro"))
 
             def refresh_account_options():
-                nuevas_opciones = opciones_por_uso_reciente(df_tx, "cuenta", cargar_catalogo("cuentas"), "Otra")
+                nuevas_opciones = opciones_recientes_movimientos(
+                    usuario,
+                    "cuenta",
+                    cargar_catalogo("cuentas"),
+                    "Otra",
+                )
                 actualizar_select(cuenta_select, nuevas_opciones)
                 nueva_cuenta.set_visibility(cuenta_select.value == "Otra")
 
             def refresh_sector_options():
-                nuevas_opciones = opciones_por_uso_reciente(
-                    df_tx_operaciones,
+                nuevas_opciones = opciones_recientes_movimientos(
+                    usuario,
                     "sector",
                     cargar_catalogo("sectores"),
                     "Otro",
+                    excluir_tipos=["Traspaso"],
                 )
                 actualizar_select(sector_select, nuevas_opciones)
                 nuevo_sector.set_visibility(sector_select.value == "Otro")
@@ -485,7 +482,7 @@ def render_ingresos_gastos(refresh, usuario):
                     return
                 insertar_transaccion(**data, usuario=usuario)
                 guardar_ultima_operacion_form(data)
-                refresh_view(refresh, f"{tipo} de {abs(importe):.2f}€ registrado correctamente.")
+                refresh_view(refresh, f"{tipo} de {formato_euros_sin_signo(abs(importe))} registrado correctamente.")
 
             def show_transfer_form():
                 form_mode["value"] = "traspaso"
@@ -503,6 +500,61 @@ def render_ingresos_gastos(refresh, usuario):
 
     @ui.refreshable
     def render_movements():
+        state = {
+            "offset": 0,
+            "loading": False,
+            "has_more": True,
+            "rows_container": None,
+            "loading_label": None,
+        }
+        total_count, total_amount = resumen_movimientos(usuario, filtros)
+
+        def render_row(row):
+            with ui.element("div").classes("table-row transactions-table"):
+                ui.label(str(row["fecha"]))
+                ui.label(row["tipo"]).classes(f"font-semibold {color_por_tipo(row['tipo'])}")
+                ui.label(row["descripcion"] or "")
+                ui.label(row["cuenta"])
+                ui.label(row["sector"])
+                euro_label(float(row["importe"]))
+                ui.button(
+                    icon="edit",
+                    on_click=lambda row=row: open_edit_transaction_dialog(row, refresh, usuario),
+                ).props("flat dense")
+
+        def append_movements():
+            if state["loading"] or not state["has_more"]:
+                return
+            state["loading"] = True
+            if state["loading_label"] is not None:
+                state["loading_label"].set_visibility(True)
+            movimientos = consultar_movimientos(
+                usuario,
+                filtros,
+                limit=batch_size,
+                offset=state["offset"],
+            )
+            if state["rows_container"] is not None:
+                with state["rows_container"]:
+                    for _, row in movimientos.iterrows():
+                        render_row(row)
+            loaded_count = len(movimientos)
+            state["offset"] += loaded_count
+            state["has_more"] = loaded_count == batch_size and state["offset"] < total_count
+            if state["loading_label"] is not None:
+                state["loading_label"].set_visibility(False)
+            state["loading"] = False
+
+        def handle_scroll(event):
+            data = event.args or {}
+            if not isinstance(data, dict):
+                return
+            scroll_top = float(data.get("scrollTop") or 0)
+            client_height = float(data.get("clientHeight") or 0)
+            scroll_height = float(data.get("scrollHeight") or 0)
+            if scroll_top + client_height >= scroll_height - 160:
+                append_movements()
+
         with ui.row().classes("w-full items-center justify-between mt-6"):
             ui.label("Movimientos").classes("section-title")
             ui.button(
@@ -512,37 +564,41 @@ def render_ingresos_gastos(refresh, usuario):
             ).props("outline dense")
         ui.label(resumen_filtros()).classes("text-sm text-gray-500")
 
-        if df_tx.empty:
+        if total_count == 0 and filtros_predeterminados():
             ui.label("Aún no hay movimientos.").classes("text-gray-500")
             return
 
-        movimientos = aplicar_filtros_movimientos()
-        if movimientos.empty:
+        if total_count == 0:
             ui.label("No hay movimientos que coincidan con los filtros.").classes("text-gray-500")
             return
 
-        total = float(movimientos["importe"].sum())
         ui.label(
-            f"{len(movimientos)} movimientos - Total {formato_euros(total)}"
+            f"{total_count} movimientos - Total {formato_euros(total_amount)}"
         ).classes("text-sm text-gray-500")
 
         with ui.card().classes("table-card"):
             with ui.element("div").classes("table-header transactions-table"):
                 for label in ["Fecha", "Tipo", "Descripción", "Cuenta", "Sector", "Importe", ""]:
                     ui.label(label).classes("font-semibold")
-            for _, row in movimientos.iterrows():
-                with ui.element("div").classes("table-row transactions-table"):
-                    ui.label(str(row["fecha"]))
-                    ui.label(row["tipo"]).classes(f"font-semibold {color_por_tipo(row['tipo'])}")
-                    ui.label(row["descripcion"] or "")
-                    ui.label(row["cuenta"])
-                    ui.label(row["sector"])
-                    euro_label(float(row["importe"]))
-                    ui.button(
-                        "Editar",
-                        icon="edit",
-                        on_click=lambda row=row: open_edit_transaction_dialog(row, refresh, usuario),
-                    ).props("dense")
+            rows_container = ui.element("div").classes("movements-scroll")
+            rows_container.on(
+                "scroll",
+                handle_scroll,
+                throttle=0.3,
+                leading_events=False,
+                trailing_events=True,
+                js_handler="""(event) => emit({
+                    scrollTop: event.target.scrollTop,
+                    clientHeight: event.target.clientHeight,
+                    scrollHeight: event.target.scrollHeight
+                })""",
+            )
+            state["rows_container"] = rows_container
+            state["loading_label"] = ui.label("Cargando más movimientos...").classes(
+                "movement-loading-label text-sm text-gray-500"
+            )
+            state["loading_label"].set_visibility(False)
+            append_movements()
 
     render_movements()
     imported_count = app.storage.user.pop("bulk_import_success_count", None)

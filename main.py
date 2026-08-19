@@ -23,6 +23,7 @@ STORAGE_SECRET = get_storage_secret()
 Storage.secret = STORAGE_SECRET
 Storage.path = NICEGUI_STORAGE_DIR
 app.add_static_files("/static", Path(__file__).parent / "static")
+FAVICON_PATH = Path(__file__).parent / "static" / "icons" / "favicon.svg"
 
 DEFAULT_SETUP_CUENTAS = ["BBVA", "Santander", "Revolut", "Efectivo"]
 DEFAULT_SETUP_SECTORES = ["Balance inicial", "Sueldo", "Restaurantes", "Compras", "Transporte", "Otros"]
@@ -432,6 +433,7 @@ if __name__ == "__main__":
     init_db()
     ui.run(
         title="FinanzAPP",
+        favicon=FAVICON_PATH,
         host="127.0.0.1",
         port=8008,
         reload=False,

@@ -94,7 +94,7 @@ def render_analisis_gasto(usuario):
     def open_filters_dialog(render_resultados):
         sectores = _sectores_disponibles(df_tx)
 
-        with ui.dialog() as dialog, ui.card().classes("dialog-card wide-dialog"):
+        with ui.dialog() as dialog, ui.card().classes("dialog-card wide-dialog rounded-2xl"):
             ui.label("Filtros de análisis").classes("text-xl font-semibold")
 
             with ui.row().classes("w-full gap-3 items-start"):
@@ -181,12 +181,16 @@ def render_analisis_gasto(usuario):
 
     @ui.refreshable
     def render_resultados():
-        ui.button(
-            "Filtros",
-            icon="filter_alt",
-            on_click=lambda: open_filters_dialog(render_resultados),
-        ).props("outline dense")
-        ui.label(resumen_filtros()).classes("text-sm text-gray-500")
+        with ui.row().classes("w-full items-center justify-between mb-4"):
+            with ui.row().classes("items-center gap-2 min-w-0"):
+                ui.icon("calendar_month").classes("text-gray-500 text-base")
+                ui.label(resumen_filtros()).classes("text-sm text-gray-500")
+            ui.button(
+                "Filtros",
+                icon="filter_alt",
+                on_click=lambda: open_filters_dialog(render_resultados),
+                color="grey",
+            ).props("outline dense").classes("text-gray-500")
 
         fecha_inicio, fecha_fin = fechas_validas()
         if fecha_inicio is None or fecha_fin is None:
@@ -203,65 +207,99 @@ def render_analisis_gasto(usuario):
             ui.label("No hay movimientos que coincidan con los filtros.").classes("text-gray-500")
             return
 
+        total_gastos = resumen["Gastos"].sum()
+        total_ingresos = resumen["Ingresos"].sum()
+        total_balance = resumen["Balance"].sum()
+        balance_bg = "bg-[#FFF1F2]" if total_balance < 0 else "bg-[#ECFDF5]"
         with ui.row().classes("w-full gap-4"):
-            metric_card("Gastos", formato_euros_sin_signo(resumen["Gastos"].sum()), "text-red-700")
-            metric_card("Ingresos", formato_euros_sin_signo(resumen["Ingresos"].sum()), "text-green-700")
-            metric_card("Balance", formato_euros(resumen["Balance"].sum()), color_por_signo(resumen["Balance"].sum()))
+            metric_card(
+                "Gastos",
+                formato_euros_sin_signo(total_gastos),
+                "text-red-700",
+                icon="arrow_downward",
+            )
+            metric_card(
+                "Ingresos",
+                formato_euros_sin_signo(total_ingresos),
+                "text-green-700",
+                icon="arrow_upward",
+            )
+            metric_card(
+                "Balance",
+                formato_euros(total_balance),
+                color_por_signo(total_balance),
+                icon="balance",
+                bg_color=balance_bg,
+            )
 
-        ui.label("Resumen por sector").classes("section-title")
-        with ui.card().classes("table-card"):
-            with ui.element("div").classes("table-header sector-table"):
-                for label in ["Sector", "Gastos", "Ingresos", "Balance", ""]:
-                    ui.label(label).classes("font-semibold")
-            for _, row in resumen.iterrows():
-                with ui.element("div").classes("table-row sector-table"):
-                    ui.label(row["Sector"])
-                    ui.label(formato_euros_sin_signo(row["Gastos"])).classes("font-semibold text-red-700")
-                    ui.label(formato_euros_sin_signo(row["Ingresos"])).classes("font-semibold text-green-700")
-                    ui.label(formato_euros(row["Balance"])).classes(f"font-semibold {color_por_signo(row['Balance'])}")
-                    ui.button(
-                        "Desglose",
-                        on_click=lambda row=row: open_sector_breakdown_dialog(
-                            df_tx,
-                            row["Sector"],
-                            fecha_inicio,
-                            fecha_fin,
-                        ),
-                    ).props("dense")
+        with ui.grid(columns="3fr 2fr").classes("w-full gap-4 items-start"):
+            with ui.column().classes("w-full min-w-0 gap-0"):
+                ui.label("Resumen por sector").classes("section-title")
+                with ui.card().classes("table-card analysis-top-card p-0 w-full"):
+                    with ui.element("div").classes("w-full h-full overflow-x-auto overflow-y-auto p-3"):
+                        with ui.element("div").classes("table-header sector-table sticky top-0 bg-white z-20"):
+                            for label in ["Sector", "Gastos", "Ingresos", "Balance", ""]:
+                                ui.label(label).classes("font-semibold")
+                        for _, row in resumen.iterrows():
+                            with ui.element("div").classes("table-row sector-table"):
+                                ui.label(row["Sector"])
+                                ui.label(formato_euros_sin_signo(row["Gastos"])).classes("font-semibold text-red-700 text-right")
+                                ui.label(formato_euros_sin_signo(row["Ingresos"])).classes("font-semibold text-green-700 text-right")
+                                ui.label(formato_euros(row["Balance"])).classes(f"font-semibold {color_por_signo(row['Balance'])} text-right")
+                                ui.button(
+                                    icon="chevron_right",
+                                    on_click=lambda row=row: open_sector_breakdown_dialog(
+                                        df_tx,
+                                        row["Sector"],
+                                        fecha_inicio,
+                                        fecha_fin,
+                                    ),
+                                ).props("flat round dense").classes("text-gray-500")
 
-        ui.label("Desglose visual").classes("section-title")
-        with ui.row().classes("w-full gap-4 items-stretch"):
-            with ui.card().classes("chart-card"):
-                resumen_graficos = resumen.copy()
-                resumen_graficos["Resultado"] = resumen_graficos["Balance"].apply(
-                    lambda v: "Positivo" if v >= 0 else "Negativo"
-                )
-                fig = px.bar(
-                    resumen_graficos,
-                    x="Sector",
-                    y="Balance",
-                    color="Resultado",
-                    title="Balance por sector",
-                    color_discrete_map={"Positivo": COLOR_POSITIVE, "Negativo": COLOR_NEGATIVE},
-                )
-                fig.update_yaxes(ticksuffix="€")
-                fig.update_layout(legend_title_text="")
-                ui.plotly(fig).classes("w-full")
-            with ui.card().classes("chart-card"):
-                perdidas = resumen[resumen["Balance"] < 0].copy()
-                if perdidas.empty:
-                    ui.label("No hay balances negativos en los sectores seleccionados.").classes("text-gray-500")
-                else:
-                    perdidas["Pérdida"] = perdidas["Balance"].abs()
-                    fig = px.pie(
-                        perdidas,
-                        names="Sector",
-                        values="Pérdida",
-                        hole=0.45,
-                        title="Reparto de pérdidas por sector",
-                        color_discrete_sequence=CHART_COLORS,
-                    )
-                    ui.plotly(fig).classes("w-full")
+            with ui.column().classes("w-full min-w-0 gap-0"):
+                ui.label("Reparto de pérdidas").classes("section-title")
+                with ui.card().classes("chart-card analysis-chart-card analysis-top-card"):
+                    perdidas = resumen[resumen["Balance"] < 0].copy()
+                    if perdidas.empty:
+                        ui.label("No hay balances negativos en los sectores seleccionados.").classes("text-gray-500")
+                    else:
+                        perdidas["Pérdida"] = perdidas["Balance"].abs()
+                        fig = px.pie(
+                            perdidas,
+                            names="Sector",
+                            values="Pérdida",
+                            hole=0.45,
+                            color_discrete_sequence=CHART_COLORS,
+                        )
+                        fig.update_layout(
+                            plot_bgcolor="rgba(0,0,0,0)",
+                            paper_bgcolor="rgba(0,0,0,0)",
+                            separators=",.",
+                        )
+                        ui.plotly(fig).classes("plotly-chart analysis-plotly")
+
+        ui.label("Balance por sector").classes("section-title")
+        with ui.card().classes("chart-card analysis-chart-card w-full"):
+            resumen_graficos = resumen.copy()
+            resumen_graficos["Resultado"] = resumen_graficos["Balance"].apply(
+                lambda v: "Positivo" if v >= 0 else "Negativo"
+            )
+            fig = px.bar(
+                resumen_graficos,
+                x="Sector",
+                y="Balance",
+                color="Resultado",
+                color_discrete_map={"Positivo": COLOR_POSITIVE, "Negativo": COLOR_NEGATIVE},
+            )
+            fig.update_yaxes(ticksuffix="€")
+            fig.update_xaxes(showgrid=False)
+            fig.update_yaxes(showgrid=True, gridcolor="#F8FAFC")
+            fig.update_layout(
+                legend_title_text="",
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                separators=",.",
+            )
+            ui.plotly(fig).classes("plotly-chart analysis-plotly")
 
     render_resultados()
-

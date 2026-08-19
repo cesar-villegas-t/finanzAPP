@@ -387,6 +387,7 @@ def init_schema(cursor):
             PRIMARY KEY (usuario, clave)
         )"""
     )
+    ensure_transaction_indexes(cursor)
 
 
 def seed_default_catalogs(cursor):
@@ -436,6 +437,25 @@ def ensure_fecha_registro_triggers(cursor):
                SET fecha_registro = date('now', 'localtime')
                WHERE id = NEW.id;
            END"""
+    )
+
+
+def ensure_transaction_indexes(cursor):
+    cursor.execute(
+        """CREATE INDEX IF NOT EXISTS idx_transacciones_usuario_fecha_id
+           ON transacciones (usuario, fecha, id)"""
+    )
+    cursor.execute(
+        """CREATE INDEX IF NOT EXISTS idx_transacciones_usuario_fecha_registro_id
+           ON transacciones (usuario, fecha_registro, id)"""
+    )
+    cursor.execute(
+        """CREATE INDEX IF NOT EXISTS idx_transacciones_usuario_importe_id
+           ON transacciones (usuario, importe, id)"""
+    )
+    cursor.execute(
+        """CREATE INDEX IF NOT EXISTS idx_transacciones_usuario_tipo_cuenta_sector
+           ON transacciones (usuario, tipo, cuenta, sector)"""
     )
 
 
@@ -505,6 +525,7 @@ def ensure_schema_compatible(cursor, username):
     ensure_column(cursor, "situacion_global", "usuario", "TEXT")
     ensure_column(cursor, "activos", "usuario", "TEXT")
     ensure_fecha_registro_triggers(cursor)
+    ensure_transaction_indexes(cursor)
     cursor.execute(
         """UPDATE transacciones
            SET fecha_registro = fecha
