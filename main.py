@@ -10,7 +10,7 @@ from db.queries import configurar_catalogos_iniciales
 from ui.styles import add_styles
 from ui.views.analysis import render_analisis_gasto
 from ui.views.dashboard import render_saldo_global
-from ui.views.investments import render_inversiones
+from ui.views.investments import open_preferences_drawer, render_inversiones
 from ui.views.transactions import render_ingresos_gastos
 
 
@@ -44,16 +44,10 @@ def manifest():
         "theme_color": "#2563EB",
         "icons": [
             {
-                "src": "/static/icons/icon-192.png",
-                "sizes": "192x192",
-                "type": "image/png",
-                "purpose": "any maskable",
-            },
-            {
-                "src": "/static/icons/icon-512.png",
-                "sizes": "512x512",
-                "type": "image/png",
-                "purpose": "any maskable",
+                "src": "/static/icons/favicon.svg",
+                "sizes": "any",
+                "type": "image/svg+xml",
+                "purpose": "any",
             },
         ],
     }
@@ -97,15 +91,25 @@ self.addEventListener('fetch', event => {
 
 def sesion_autenticada():
     if not app.storage.user.get("authenticated"):
-        app.storage.user.clear()
+        clear_user_storage()
         return False
     username = app.storage.user.get("username")
     if not username:
         return False
     if username not in list_users():
-        app.storage.user.clear()
+        clear_user_storage()
         return False
     return True
+
+
+def clear_user_storage():
+    try:
+        app.storage.user.clear()
+    except PermissionError:
+        # Windows can keep the persisted NiceGUI storage file locked when
+        # another dev-server process is still running. The in-memory dict is
+        # already cleared before NiceGUI unlinks the file.
+        pass
 
 
 def username_actual():
@@ -237,40 +241,133 @@ def open_initial_setup_dialog(on_done):
     dialog.props("persistent")
     dialog.open()
 
+def render_auth_card(on_login_callback, on_register_callback, initial_mode="login"):
+    mode = {"value": initial_mode if initial_mode in {"login", "register"} else "login"}
+    password_visible = {"value": False}
+
+    with ui.element("div").classes("min-h-screen w-full bg-slate-50 flex items-center justify-center p-6"):
+        with ui.card().classes("w-full max-w-sm bg-white p-8 rounded-2xl shadow-2xl shadow-slate-200/60 gap-6"):
+            with ui.column().classes("w-full items-center gap-2 text-center"):
+                ui.image("/static/icons/favicon.svg").classes("w-12 h-12")
+                with ui.row().classes("items-baseline justify-center gap-0"):
+                    ui.label("Finanz").classes("text-3xl font-bold text-[#1E293B]")
+                    ui.label("APP").classes("text-3xl font-bold text-[#2563EB]")
+                ui.label("Gestión patrimonial inteligente").classes("text-sm text-slate-400")
+
+            @ui.refreshable
+            def render_auth_form():
+                user_input = None
+                password_input = None
+                confirm_input = None
+
+                def set_mode(new_mode):
+                    mode["value"] = new_mode
+                    password_visible["value"] = False
+                    render_auth_form.refresh()
+
+                def submit():
+                    username = (user_input.value or "").strip()
+                    password = password_input.value or ""
+                    confirm_password = confirm_input.value if confirm_input else None
+
+                    if not username or not password or (mode["value"] == "register" and not confirm_password):
+                        ui.notify("Completa todos los campos.", color="warning")
+                        return
+                    if mode["value"] == "register" and password != confirm_password:
+                        ui.notify("Las contraseñas no coinciden.", color="warning")
+                        return
+
+                    if mode["value"] == "login":
+                        on_login_callback(username, password)
+                    else:
+                        on_register_callback(username, password)
+
+                def toggle_password_visibility():
+                    password_visible["value"] = not password_visible["value"]
+                    password_input.props(f'type={"text" if password_visible["value"] else "password"}')
+                    password_visibility_icon.props(
+                        f'name={"visibility" if password_visible["value"] else "visibility_off"}'
+                    )
+
+                with ui.tabs(value=mode["value"]).classes(
+                    "asset-chart-tabs auth-mode-tabs bg-[#F8FAFC] rounded-full p-1 w-full"
+                ).props('dense no-caps active-color="dark" indicator-color="transparent"') as auth_tabs:
+                    ui.tab("login", label="Iniciar sesión")
+                    ui.tab("register", label="Crear usuario")
+                auth_tabs.on("update:model-value", lambda event: set_mode(event.args))
+
+                with ui.column().classes("w-full gap-4"):
+                    user_input = ui.input("Usuario").props(
+                        'outlined color=blue-8 input-class="text-lg"'
+                    ).classes("w-full rounded-xl")
+                    with user_input.add_slot("prepend"):
+                        ui.icon("person").classes("text-slate-400")
+
+                    password_input = ui.input("Contraseña", password=not password_visible["value"]).props(
+                        'outlined color=blue-8 input-class="text-lg"'
+                    ).classes("w-full rounded-xl")
+                    with password_input.add_slot("prepend"):
+                        ui.icon("lock").classes("text-slate-400")
+                    with password_input.add_slot("append"):
+                        password_visibility_icon = ui.icon(
+                            "visibility" if password_visible["value"] else "visibility_off"
+                        ).classes("cursor-pointer text-slate-400 hover:text-[#2563EB] transition-colors")
+                    password_visibility_icon.on("click", lambda _: toggle_password_visibility())
+
+                    if mode["value"] == "register":
+                        confirm_input = ui.input("Confirmar Contraseña", password=True).props(
+                            'outlined color=blue-8 input-class="text-lg"'
+                        ).classes("w-full rounded-xl")
+                        with confirm_input.add_slot("prepend"):
+                            ui.icon("lock_reset").classes("text-slate-400")
+
+                    inputs = [user_input, password_input]
+                    if confirm_input:
+                        inputs.append(confirm_input)
+                    for input_field in inputs:
+                        input_field.on("keydown.enter", lambda _: submit())
+
+                    button_label = "Acceder" if mode["value"] == "login" else "Crear Cuenta"
+                    ui.button(button_label, on_click=submit).props("unelevated no-caps").classes(
+                        "w-full bg-[#2563EB] text-white rounded-xl py-3 font-semibold text-base transition-colors hover:bg-blue-700"
+                    )
+
+            render_auth_form()
+
+
+def handle_login(username, password):
+    username_valido = verify_user(username, password)
+    if not username_valido:
+        ui.notify("Usuario o contraseña incorrectos.", color="negative")
+        return
+    app.storage.user.update({
+        "authenticated": True,
+        "username": username_valido,
+    })
+    ui.navigate.to("/")
+
+
+def handle_register(username, password):
+    try:
+        username_creado = create_user(username, password)
+    except ValueError as exc:
+        ui.notify(str(exc), color="warning")
+        return
+    app.storage.user.update({
+        "authenticated": True,
+        "username": username_creado,
+        "needs_initial_setup": True,
+    })
+    ui.navigate.to("/")
+
+
 @ui.page("/login")
 def login():
     add_styles()
     if sesion_autenticada():
         ui.navigate.to("/")
         return
-
-    with ui.column().classes("app-shell w-full items-center"):
-        with ui.card().classes("dialog-card").style("margin-top: 12vh;"):
-            ui.label("FinanzAPP").classes("text-3xl font-bold")
-            ui.label("Inicia sesión para continuar").classes("text-sm text-gray-500")
-            user_input = ui.input("Usuario").classes("w-full")
-            password_input = ui.input(
-                "Contraseña",
-                password=True,
-                password_toggle_button=True,
-            ).classes("w-full")
-
-            def do_login():
-                username = (user_input.value or "").strip()
-                password = password_input.value or ""
-                username_valido = verify_user(username, password)
-                if not username_valido:
-                    ui.notify("Usuario o contraseña incorrectos.", color="negative")
-                    return
-                app.storage.user.update({
-                    "authenticated": True,
-                    "username": username_valido,
-                })
-                ui.navigate.to("/")
-
-            password_input.on("keydown.enter", lambda _: do_login())
-            ui.button("Entrar", icon="login", on_click=do_login).classes("w-full")
-            ui.button("Crear usuario", icon="person_add", on_click=lambda: ui.navigate.to("/register")).props("outline").classes("w-full")
+    render_auth_card(handle_login, handle_register)
 
 
 @ui.page("/register")
@@ -279,49 +376,11 @@ def register():
     if sesion_autenticada():
         ui.navigate.to("/")
         return
-
-    with ui.column().classes("app-shell w-full items-center"):
-        with ui.card().classes("dialog-card").style("margin-top: 10vh;"):
-            ui.label("Crear usuario").classes("text-3xl font-bold")
-            ui.label("La contraseña debe tener mínimo 8 caracteres, una mayúscula y un número.").classes("text-sm text-gray-500")
-            user_input = ui.input("Usuario").classes("w-full")
-            password_input = ui.input(
-                "Contraseña",
-                password=True,
-                password_toggle_button=True,
-            ).classes("w-full")
-            confirm_input = ui.input(
-                "Confirmar contraseña",
-                password=True,
-                password_toggle_button=True,
-            ).classes("w-full")
-
-            def do_register():
-                username = (user_input.value or "").strip()
-                password = password_input.value or ""
-                confirm_password = confirm_input.value or ""
-                if password != confirm_password:
-                    ui.notify("Las contraseñas no coinciden.", color="warning")
-                    return
-                try:
-                    username_creado = create_user(username, password)
-                except ValueError as exc:
-                    ui.notify(str(exc), color="warning")
-                    return
-                app.storage.user.update({
-                    "authenticated": True,
-                    "username": username_creado,
-                    "needs_initial_setup": True,
-                })
-                ui.navigate.to("/")
-
-            confirm_input.on("keydown.enter", lambda _: do_register())
-            ui.button("Crear cuenta", icon="person_add", on_click=do_register).classes("w-full")
-            ui.button("Volver al login", icon="arrow_back", on_click=lambda: ui.navigate.to("/login")).props("outline").classes("w-full")
+    render_auth_card(handle_login, handle_register, initial_mode="register")
 
 
 def logout():
-    app.storage.user.clear()
+    clear_user_storage()
     ui.navigate.to("/login")
 
 
@@ -356,7 +415,12 @@ def main(tab: str = "saldo"):
                     ui.label(username).classes("px-3 pt-2 pb-1 text-sm font-bold text-[#1E293B]")
                     ui.separator().classes("my-1 bg-[#E2E8F0]")
 
-                    with ui.item(on_click=user_menu.close).classes("rounded-xl px-3 py-2 text-[#64748B]"):
+                    def open_preferences_from_menu():
+                        user_menu.close()
+                        with ui.context.client.content:
+                            open_preferences_drawer(username)
+
+                    with ui.item(on_click=open_preferences_from_menu).classes("rounded-xl px-3 py-2 text-[#64748B]"):
                         with ui.item_section().props("avatar"):
                             ui.icon("settings").classes("text-[#64748B]")
                         with ui.item_section():
@@ -439,4 +503,3 @@ if __name__ == "__main__":
         reload=False,
         storage_secret=STORAGE_SECRET,
     )
-

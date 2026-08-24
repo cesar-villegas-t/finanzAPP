@@ -12,6 +12,7 @@ TABLAS_CON_USUARIO = {
     "operaciones_inversion",
     "situacion_global",
     "activos",
+    "activos_cotizacion",
 }
 CATALOGOS_PERMITIDOS = {"brokers", "tipos_activo", "cuentas", "sectores"}
 TABLAS_PERMITIDAS = TABLAS_CON_USUARIO | CATALOGOS_PERMITIDOS
@@ -1188,6 +1189,87 @@ def actualizar_clasificacion_inversiones(registros, usuario):
                        tipo_activo = excluded.tipo_activo""",
                 (inversion, aplicacion, tipo_activo, usuario),
             )
+        conn.commit()
+
+
+def cargar_cotizaciones_activos(usuario):
+    with conectar_db() as conn:
+        rows = conn.execute(
+            """SELECT inversion, ticker_yahoo, divisa_cotizacion, divisa_valoracion,
+                      auto_update_enabled, logo_url
+               FROM activos_cotizacion
+               WHERE usuario = ?""",
+            (usuario,),
+        ).fetchall()
+    return {
+        row[0]: {
+            "ticker_yahoo": row[1] or "",
+            "divisa_cotizacion": row[2] or "",
+            "divisa_valoracion": row[3] or "EUR",
+            "auto_update_enabled": bool(row[4] if row[4] is not None else 1),
+            "logo_url": row[5] or "",
+        }
+        for row in rows
+    }
+
+
+def guardar_cotizaciones_activos(registros, usuario):
+    with conectar_db() as conn:
+        for registro in registros:
+            inversion = (registro.get("inversion") or "").strip()
+            ticker = (registro.get("ticker_yahoo") or "").strip().upper()
+            if not inversion:
+                continue
+            divisa_cotizacion = (registro.get("divisa_cotizacion") or "").strip().upper()
+            divisa_valoracion = (registro.get("divisa_valoracion") or "EUR").strip().upper() or "EUR"
+            logo_url = (registro.get("logo_url") or "").strip()
+            if not ticker and not divisa_cotizacion and not logo_url:
+                conn.execute(
+                    """DELETE FROM activos_cotizacion
+                       WHERE usuario = ? AND inversion = ?""",
+                    (usuario, inversion),
+                )
+                continue
+            auto_update_enabled = 1 if ticker and registro.get("auto_update_enabled", True) else 0
+            conn.execute(
+                """INSERT INTO activos_cotizacion
+                   (usuario, inversion, ticker_yahoo, divisa_cotizacion, divisa_valoracion,
+                    auto_update_enabled, logo_url)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(usuario, inversion) DO UPDATE SET
+                       ticker_yahoo = excluded.ticker_yahoo,
+                       divisa_cotizacion = excluded.divisa_cotizacion,
+                       divisa_valoracion = excluded.divisa_valoracion,
+                       auto_update_enabled = excluded.auto_update_enabled,
+                       logo_url = COALESCE(NULLIF(excluded.logo_url, ''), activos_cotizacion.logo_url)""",
+                (
+                    usuario,
+                    inversion,
+                    ticker,
+                    divisa_cotizacion,
+                    divisa_valoracion,
+                    auto_update_enabled,
+                    logo_url,
+                ),
+            )
+        conn.commit()
+
+
+def actualizar_logo_activo(inversion, logo_url, usuario):
+    inversion = (inversion or "").strip()
+    logo_url = (logo_url or "").strip()
+    if not inversion:
+        return
+    with conectar_db() as conn:
+        conn.execute(
+            """INSERT INTO activos_cotizacion
+               (usuario, inversion, ticker_yahoo, divisa_cotizacion, divisa_valoracion,
+                auto_update_enabled, logo_url)
+               VALUES (?, ?, '', '', 'EUR', 0, ?)
+               ON CONFLICT(usuario, inversion) DO UPDATE SET
+                   logo_url = excluded.logo_url""",
+            (usuario, inversion, logo_url),
+        )
         conn.commit()
 
 

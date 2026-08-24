@@ -1,6 +1,6 @@
 # FinanzAPP Repository Context
 
-Last reviewed: 2026-08-07.
+Last reviewed: 2026-08-24.
 
 This file is the persistent project briefing for future chats. Read it before
 working on the repository, and keep it updated whenever important behavior,
@@ -37,6 +37,11 @@ server-side and view modules call `db.queries` directly.
   cleanup archiving.
 - `services/analytics.py`: Pandas calculations for liquidity, net worth,
   investment evolution, sector summaries and select-option ordering.
+- `services/asset_logos.py`: yfinance website lookup plus DuckDuckGo
+  Icons/UI-Avatars logo URL generation for investment asset cards.
+- `services/market_prices.py`: yfinance-based quote lookup for investment
+  valuation autofill, including same-day-or-previous close and FX conversion
+  into EUR.
 - `services/bulk_transactions.py`: strict parser/validator for bulk transaction
   `.txt` imports.
 - `ui/components.py`: shared UI helpers, formatting, catalog dialogs and
@@ -46,9 +51,10 @@ server-side and view modules call `db.queries` directly.
 - `ui/views/transactions.py`: "Ingresos y Gastos" tab.
 - `ui/views/analysis.py`: "Analisis de gasto" tab.
 - `ui/views/investments.py`: "Inversiones" tab.
-- `static/icons/`: PWA icons and the SVG browser favicon.
+- `static/icons/`: SVG app icon and browser favicon.
 - `private/`: local auth, SQLite DBs, backups and NiceGUI storage. Ignored by
-  Git and should be treated as sensitive local data.
+  Git and should be treated as sensitive local data. yfinance runtime cache is
+  stored under `private/cache/yfinance`.
 - `fa/`: existing local virtual environment. Exclude it from code searches.
 - `tmp/` and `.tmp/`: temporary/noisy directories. Exclude them from code
   searches.
@@ -67,6 +73,7 @@ Dependencies are pinned in `requirements.txt`:
 - `plotly==6.5.2`
 - `fastapi==0.136.3`
 - `uvicorn==0.49.0`
+- `yfinance==1.5.2`
 
 Typical local setup:
 
@@ -89,6 +96,12 @@ If port `8008` is busy on Windows:
 netstat -ano | findstr :8008
 taskkill /F /PID <PID>
 ```
+
+Running multiple local NiceGUI processes against the same
+`FINANZAPP_STORAGE_DIR` can lock files under `private/nicegui` on Windows.
+Session cleanup tolerates a `PermissionError` during storage-file deletion, but
+the correct development workflow is still to stop the old process before
+starting another server on the same app/storage.
 
 Basic syntax validation:
 
@@ -168,6 +181,9 @@ that file or directory. Never upload `private/`, `tmp/`, `fa/`, `.git` or
 - `FINANZAPP_BACKUP_ON_STARTUP`: default `1`; set `0` to skip startup backups.
 - `FINANZAPP_BACKUP_MIN_HOURS`: default `24`.
 
+yfinance timezone cache is created at `FINANZAPP_PRIVATE_DIR/cache/yfinance` so
+quote lookups do not depend on an external user-cache directory.
+
 `.env.example` contains production-style paths under `/var/lib/finanzapp`.
 Do not commit a real `.env`.
 
@@ -208,8 +224,9 @@ task explicitly requires it.
 2. Ensures private directories exist.
 3. Configures NiceGUI `Storage.secret` and `Storage.path`.
 4. Serves `/static`.
-5. Defines PWA `/manifest.json` and `/service-worker.js`; the global head and
-   `ui.run(favicon=...)` use `/static/icons/favicon.svg` as the browser favicon.
+5. Defines PWA `/manifest.json` and `/service-worker.js`; the manifest, global
+   head and `ui.run(favicon=...)` use `/static/icons/favicon.svg` as the app
+   icon and browser favicon.
 6. On direct execution, calls `init_db()` then `ui.run(...)`.
 
 `init_db()`:
@@ -226,15 +243,17 @@ task explicitly requires it.
 
 Routes:
 
-- `/login`: login page.
-- `/register`: create user page.
+- `/login`: unified authentication card, defaulting to login mode.
+- `/register`: same authentication card, defaulting to create-user mode for
+  backwards-compatible direct links.
 - `/`: authenticated app shell with tabs.
 - `/manifest.json`: PWA manifest.
 - `/service-worker.js`: simple app-shell cache.
 
 The authenticated header shows a circular user avatar with the user's initial.
-Its dropdown menu contains "Preferencias" as a placeholder and "Cerrar sesión"
-for the existing logout flow.
+Its dropdown menu contains "Preferencias", which opens a right-side slide-over
+preferences drawer with the brokers/asset-types catalog section, and
+"Cerrar sesión" for logout.
 
 Main tabs:
 
@@ -247,13 +266,25 @@ Main tabs:
 - `analisis`: persisted date/sector filters, sector expense/income/balance
   summary, breakdown dialog and charts.
 - `inversiones`: investment summary, register buy/sell operation, update market
-  valuations, edit asset classification, edit brokers/types, review current
-  allocation and current asset balances, and open a history modal with operation
-  and valuation histories. Each active asset row can open a large asset detail
-  modal with key metrics, a segmented chart selector for position versus unit
-  price, the charted valuation records and that asset's buy/sell operation
-  history. Investment operations store bought/sold units or shares, and active
-  assets plus histories show known unit positions.
+  valuations, edit asset classification, review current
+  allocation and current asset balances, open a history modal with operation
+  and valuation histories, and open an "Análisis histórico" modal. The
+  historical analysis combines buy/sell operations with latest open valuations:
+  initial invested money is gross buys, final/current value is gross sells plus
+  latest open value, and the modal shows summary cards, grouped bars by asset
+  type and an all-assets table including closed positions. The "Registrar operación"
+  action opens a dropdown
+  with separate flows for operating on an existing asset or adding a new asset.
+  Existing-asset operations show current units plus either Yahoo market price
+  feedback or the last registered value. New-asset operations use an
+  automatic/manual segmented setup: automatic creation validates and confirms
+  Yahoo ticker metadata before saving, while manual creation hides ticker/market
+  fields and asks only for asset name, broker/entity and asset type. Each active
+  asset row can open a large asset detail modal with key metrics, a segmented
+  chart selector for position versus unit price, the charted valuation records
+  and that asset's buy/sell operation history. Investment operations store
+  bought/sold units or shares, and active assets plus histories show known unit
+  positions.
   The valuation update dialog orders assets by broker, asset type and descending
   initial value, and shows the last registered value as a read-only reference.
 
@@ -270,6 +301,9 @@ by Python/browser controls.
 New users get `needs_initial_setup=True` and see a three-step catalog setup for
 accounts, sectors and brokers. Choosing "Configurar mas adelante" applies the
 default catalogs.
+
+The Preferences drawer directly embeds the brokers and asset-types catalog
+editor as a two-column vault-style card grid with inline add cards.
 
 ## Database Schema
 
@@ -302,6 +336,11 @@ Tables:
 - `tipos_activo`: catalog table, `nombre` primary key.
 - `activos`: canonical asset classification, `inversion`, `aplicacion`,
   `tipo_activo`, `usuario`, primary key `(inversion, usuario)`.
+- `activos_cotizacion`: optional quote metadata by `(usuario, inversion)` with
+  `ticker_yahoo`, `divisa_cotizacion`, `divisa_valoracion`,
+  `auto_update_enabled` and `logo_url`. It is used for optional yfinance
+  valuation autofill and persisted asset-card logos; final valuation snapshots
+  remain in `inversiones`.
 - `preferencias_usuario`: JSON preferences by `(usuario, clave)`.
 
 Supporting indexes include transaction indexes by `(usuario, fecha, id)`,
@@ -396,6 +435,22 @@ Investments:
   operations.
 - New operations and valuation inserts/upserts maintain `activos`; operations
   also ensure related catalog entries exist.
+- Asset quote metadata is optional and stored separately in
+  `activos_cotizacion`. Editing assets can set a Yahoo Finance ticker/ISIN;
+  the quote currency is read-only in the editor and is filled by validating the
+  ticker against Yahoo Finance. The asset editor can manually synchronize a
+  persisted `logo_url`: it uses Yahoo Finance website metadata and DuckDuckGo
+  Icons when possible, otherwise a UI-Avatars fallback. Quote metadata remains
+  optional.
+- When creating a new asset from the investment operation dialog, the user can
+  choose automatic Yahoo creation or manual creation. Automatic creation can
+  look up the Yahoo ticker metadata, show the resolved logo beside the result
+  preview, and fill the new asset name and quote currency before saving the
+  operation. The resolved logo URL is stored with the asset quote metadata.
+- The valuation update dialog has an optional "Rellenar automáticamente" action.
+  It uses configured yfinance tickers and current open units to fill the
+  visible "Valor actual" inputs, converts non-EUR prices into EUR via Yahoo FX
+  pairs, and still requires the user to save the valuation record manually.
 - After operation changes, later valuation snapshot capital (`dinero_inicial`)
   is recalculated from operation history.
 - If operation history exists up to a valuation date, snapshot `dinero_inicial`

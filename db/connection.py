@@ -379,6 +379,7 @@ def init_schema(cursor):
             PRIMARY KEY (inversion, usuario)
         )"""
     )
+    ensure_activos_cotizacion_table(cursor)
     cursor.execute(
         """CREATE TABLE IF NOT EXISTS preferencias_usuario (
             usuario TEXT,
@@ -413,6 +414,35 @@ def ensure_column(cursor, table, column, definition):
     columns = {row[1] for row in cursor.execute(f"PRAGMA table_info({table})").fetchall()}
     if column not in columns:
         cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
+def ensure_activos_cotizacion_table(cursor):
+    cursor.execute(
+        """CREATE TABLE IF NOT EXISTS activos_cotizacion (
+            usuario TEXT,
+            inversion TEXT,
+            ticker_yahoo TEXT,
+            divisa_cotizacion TEXT,
+            divisa_valoracion TEXT DEFAULT 'EUR',
+            auto_update_enabled INTEGER DEFAULT 1,
+            logo_url TEXT,
+            PRIMARY KEY (usuario, inversion)
+        )"""
+    )
+    ensure_column(cursor, "activos_cotizacion", "divisa_cotizacion", "TEXT")
+    ensure_column(cursor, "activos_cotizacion", "divisa_valoracion", "TEXT DEFAULT 'EUR'")
+    ensure_column(cursor, "activos_cotizacion", "auto_update_enabled", "INTEGER DEFAULT 1")
+    ensure_column(cursor, "activos_cotizacion", "logo_url", "TEXT")
+    cursor.execute(
+        """UPDATE activos_cotizacion
+           SET divisa_valoracion = 'EUR'
+           WHERE divisa_valoracion IS NULL OR TRIM(divisa_valoracion) = ''"""
+    )
+    cursor.execute(
+        """UPDATE activos_cotizacion
+           SET auto_update_enabled = 1
+           WHERE auto_update_enabled IS NULL"""
+    )
 
 
 def ensure_fecha_registro_triggers(cursor):
@@ -524,6 +554,7 @@ def ensure_schema_compatible(cursor, username):
     ensure_column(cursor, "operaciones_inversion", "fecha_registro", "TEXT")
     ensure_column(cursor, "situacion_global", "usuario", "TEXT")
     ensure_column(cursor, "activos", "usuario", "TEXT")
+    ensure_activos_cotizacion_table(cursor)
     ensure_fecha_registro_triggers(cursor)
     ensure_transaction_indexes(cursor)
     cursor.execute(
@@ -597,6 +628,16 @@ def delete_orphan_assets(cursor, username):
                  SELECT 1 FROM operaciones_inversion
                  WHERE operaciones_inversion.usuario = activos.usuario
                    AND operaciones_inversion.inversion = activos.inversion
+             )""",
+        (username,),
+    )
+    cursor.execute(
+        """DELETE FROM activos_cotizacion
+           WHERE usuario = ?
+             AND NOT EXISTS (
+                 SELECT 1 FROM activos
+                 WHERE activos.usuario = activos_cotizacion.usuario
+                   AND activos.inversion = activos_cotizacion.inversion
              )""",
         (username,),
     )

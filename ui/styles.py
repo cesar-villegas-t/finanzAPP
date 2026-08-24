@@ -18,7 +18,6 @@ def add_styles():
         <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-title" content="FinanzAPP">
         <meta name="apple-mobile-web-app-status-bar-style" content="default">
-        <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
         <script>
         if ('serviceWorker' in navigator) {
           window.addEventListener('load', () => {
@@ -254,6 +253,8 @@ def add_styles():
             min-height: 420px;
             overflow-y: auto;
             overflow-x: hidden;
+            position: relative;
+            background: var(--color-bg-surface);
             width: 100%;
         }
         .current-assets-table {
@@ -264,7 +265,7 @@ def add_styles():
             align-items: center;
             column-gap: 10px;
         }
-        .current-assets-table > *:not(.current-assets-row) {
+        .current-assets-table > *:not(.current-assets-row):not(.current-assets-header-row) {
             min-width: 0;
             padding: 9px 6px;
             border-bottom: 1px solid #E2E8F0;
@@ -272,19 +273,39 @@ def add_styles():
             text-overflow: ellipsis;
             white-space: nowrap;
         }
+        .current-assets-header-row {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: minmax(0, 1.4fr) 104px 124px minmax(0, 1fr) 48px;
+            align-items: center;
+            min-width: 0;
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background: #FFFFFF;
+            border-bottom: 1px solid #E2E8F0;
+            box-shadow: 0 1px 0 rgba(226, 232, 240, 0.95);
+        }
+        .current-assets-header-row > * {
+            min-width: 0;
+            padding: 9px 6px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            background: #FFFFFF;
+        }
         .current-assets-table-header {
             color: var(--color-text-muted);
             font-weight: 700;
-            position: sticky;
-            top: 0;
-            z-index: 1;
-            background: var(--color-bg-surface);
+            background: #FFFFFF !important;
         }
         .current-assets-row {
             grid-column: 1 / -1;
             display: grid;
             grid-template-columns: minmax(0, 1.4fr) 104px 124px minmax(0, 1fr) 48px;
             align-items: center;
+            position: relative;
+            z-index: 0;
             min-width: 0;
             min-height: 44px;
             border-bottom: 1px solid #E2E8F0;
@@ -378,6 +399,44 @@ def add_styles():
             overflow-y: clip;
             max-height: none !important;
         }
+        .historical-analysis-dialog {
+            width: min(1500px, calc(100vw - 32px)) !important;
+            max-width: calc(100vw - 32px) !important;
+            height: min(860px, calc(100vh - 32px)) !important;
+            max-height: calc(100vh - 32px) !important;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .historical-analysis-dialog-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            width: 100%;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding-right: 4px;
+        }
+        .historical-analysis-main {
+            display: grid;
+            grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+            gap: 16px;
+            width: 100%;
+            align-items: stretch;
+            margin-top: 12px;
+        }
+        .historical-analysis-chart-card,
+        .historical-analysis-table-card {
+            min-width: 0;
+            width: 100%;
+        }
+        .historical-analysis-plot {
+            height: 460px;
+            min-height: 460px;
+        }
+        .historical-analysis-table-card .current-assets-scroll {
+            height: 460px;
+            min-height: 460px;
+        }
         .asset-detail-dialog {
             width: min(1500px, calc(100vw - 32px)) !important;
             max-width: calc(100vw - 32px) !important;
@@ -452,6 +511,66 @@ def add_styles():
             color: #1E293B;
             box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
         }
+        .operation-type-tabs .q-tabs__content {
+            width: 100%;
+        }
+        .operation-type-tabs .q-tab {
+            flex: 1 1 0;
+            background: transparent;
+            color: #94A3B8;
+            border: 1px solid transparent;
+            box-shadow: none;
+        }
+        .operation-type-tabs .q-tab:nth-child(1).q-tab--active {
+            background: #ECFDF5;
+            color: #047857;
+            border-color: #A7F3D0;
+            font-weight: 700;
+            box-shadow: none;
+        }
+        .operation-type-tabs .q-tab:nth-child(2).q-tab--active {
+            background: #FFF1F2;
+            color: #BE123C;
+            border-color: #FECDD3;
+            font-weight: 700;
+            box-shadow: none;
+        }
+        .auth-mode-tabs .q-tabs__content {
+            width: 100%;
+        }
+        .auth-mode-tabs .q-tab {
+            flex: 1 1 0;
+        }
+        .operation-date-input .q-field__control {
+            border-radius: 8px;
+            background: #F8FAFC;
+        }
+        .operation-number-input .q-field__control {
+            border-radius: 12px;
+            background: #F8FAFC;
+        }
+        .operation-date-input .q-field__control::before,
+        .operation-number-input .q-field__control::before {
+            border-color: #E2E8F0;
+        }
+        .operation-date-input.q-field--focused .q-field__control,
+        .operation-number-input.q-field--focused .q-field__control {
+            background: #FFFFFF;
+        }
+        .operation-date-input.q-field--focused .q-field__control::after,
+        .operation-number-input.q-field--focused .q-field__control::after {
+            border-color: var(--color-primary);
+            border-width: 2px;
+        }
+        .operation-number-input .q-field__native,
+        .operation-number-input .q-field__suffix {
+            font-variant-numeric: tabular-nums;
+        }
+        .operation-number-input .q-field__suffix {
+            color: #94A3B8;
+            font-weight: 700;
+            padding-left: 8px;
+        }
         .asset-chart-panels,
         .asset-chart-tab-panel {
             background: transparent;
@@ -523,9 +642,23 @@ def add_styles():
             z-index: 1;
             background: var(--color-bg-surface);
         }
-        .investment-entry-dialog { width: min(1680px, calc(100vw - 48px)) !important; max-width: calc(100vw - 48px) !important; max-height: 92vh; overflow-y: auto; overflow-x: auto; }
+        .investment-entry-dialog { width: min(1120px, calc(100vw - 48px)) !important; max-width: calc(100vw - 48px) !important; max-height: 92vh; overflow-y: auto; overflow-x: hidden; }
         .investment-entry-table { width: 100%; max-width: 100%; overflow: visible; }
-        .investment-entry-rows { display: contents; }
+        .investment-entry-rows {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 100%;
+        }
+        .investment-valuation-card {
+            width: 100%;
+            min-width: 0;
+        }
+        .investment-valuation-card .q-field__native,
+        .investment-valuation-card .q-field__suffix {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
         .investment-entry-row {
             display: grid;
             grid-template-columns: 64px minmax(0, 1.35fr) minmax(0, 0.95fr) minmax(0, 0.95fr) minmax(0, 0.8fr) minmax(0, 0.8fr) minmax(0, 0.95fr);
@@ -572,17 +705,67 @@ def add_styles():
         .investment-entry-check-cell > * { width: auto; }
         .investment-entry-header { color: var(--color-text-muted); border-bottom: 1px solid #E2E8F0; font-weight: 700; }
         .investment-entry-data { border-bottom: 1px solid #E2E8F0; min-height: 64px; }
-        .asset-edit-dialog { width: min(1180px, calc(100vw - 48px)) !important; max-width: calc(100vw - 48px) !important; max-height: 92vh; overflow-y: auto; overflow-x: hidden; }
+        .asset-edit-dialog { width: min(1500px, calc(100vw - 48px)) !important; max-width: calc(100vw - 48px) !important; max-height: 92vh; overflow-y: auto; overflow-x: auto; }
         .asset-edit-row {
             display: grid;
-            grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+            grid-template-columns: minmax(180px, 1.4fr) minmax(150px, 1fr) minmax(150px, 1fr) minmax(130px, 0.8fr) minmax(88px, 0.55fr) minmax(110px, 0.6fr) 56px;
             width: 100%;
-            min-width: 0;
+            min-width: 1060px;
             align-items: center;
             gap: 10px;
             padding: 8px 6px;
         }
         .asset-edit-row > * { width: 100%; min-width: 0; }
+        .preferences-drawer-card {
+            width: min(450px, 100vw) !important;
+            min-width: min(450px, 100vw) !important;
+            max-width: min(450px, 100vw) !important;
+            overflow-x: hidden;
+        }
+        .catalog-preferences-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        }
+        .catalog-preferences-grid > * {
+            min-width: 0;
+            max-width: 100%;
+        }
+        .catalog-preferences-grid .q-field,
+        .catalog-preferences-grid .q-btn {
+            min-width: 0;
+        }
+        .catalog-delete-button {
+            color: #CBD5E1 !important;
+            opacity: 0.34;
+            transition: color 180ms ease, opacity 180ms ease, background-color 180ms ease;
+        }
+        .catalog-delete-button .q-icon,
+        .catalog-delete-button .q-btn__content {
+            color: inherit !important;
+        }
+        .catalog-delete-button:hover {
+            color: var(--color-negative) !important;
+            opacity: 1;
+            background: transparent !important;
+        }
+        .catalog-delete-button .q-focus-helper {
+            display: none;
+        }
+        .catalog-create-card {
+            transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, background-color 180ms ease;
+        }
+        .catalog-create-card:hover {
+            transform: translateY(-0.25rem);
+            box-shadow: 0 10px 18px rgba(15, 23, 42, 0.10);
+            border-color: var(--color-primary) !important;
+            background: rgba(239, 246, 255, 0.30);
+        }
+        .catalog-create-icon {
+            color: #CBD5E1;
+            transition: color 180ms ease;
+        }
+        .catalog-create-card:hover .catalog-create-icon {
+            color: var(--color-primary);
+        }
         .catalog-dialog { width: 720px; max-width: 96vw; max-height: 92vh; overflow-y: auto; }
         .catalog-row {
             display: grid;
@@ -684,6 +867,9 @@ def add_styles():
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
             .asset-detail-top {
+                grid-template-columns: minmax(0, 1fr);
+            }
+            .historical-analysis-main {
                 grid-template-columns: minmax(0, 1fr);
             }
             .asset-detail-values-panel {
