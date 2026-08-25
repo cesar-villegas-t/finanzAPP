@@ -6,6 +6,7 @@ from nicegui import ui
 from db.queries import cargar_datos
 from services.analytics import calcular_liquidez_por_fecha, calcular_patrimonio_total_por_fecha
 from ui.components import (
+    aplicar_tema_grafica,
     color_por_signo,
     formato_euros_sin_signo,
     formato_numero,
@@ -21,14 +22,14 @@ COLOR_GRID_SUBTLE = "#F1F5F9"
 CHART_COLORS = ["#3B82F6", "#06B6D4", "#8B5CF6", "#F97316", "#F43F5E"]
 
 
-def prepare_chart(fig, height=420):
+def prepare_chart(fig, height=420, is_dark=False):
     fig.update_layout(
         autosize=True,
         height=height,
         margin={"l": 24, "r": 24, "t": 48, "b": 24},
         separators=",.",
     )
-    return fig
+    return aplicar_tema_grafica(fig, is_dark)
 
 
 def formato_euros_hover(valor):
@@ -40,7 +41,7 @@ def rgba_from_hex(color, opacity):
     return f"rgba({red}, {green}, {blue}, {opacity})"
 
 
-def prepare_financial_area_chart(data, x_col, y_col, color):
+def prepare_financial_area_chart(data, x_col, y_col, color, is_dark=False):
     chart_data = data.copy()
     chart_data[x_col] = pd.to_datetime(chart_data[x_col])
     chart_data["Fecha hover"] = chart_data[x_col].dt.strftime("%d/%m/%Y")
@@ -66,14 +67,7 @@ def prepare_financial_area_chart(data, x_col, y_col, color):
         )
     )
     fig.update_layout(
-        plot_bgcolor="#FFFFFF",
-        paper_bgcolor="rgba(255,255,255,0)",
         hovermode="closest",
-        hoverlabel={
-            "bgcolor": "#FFFFFF",
-            "bordercolor": COLOR_GRID_SUBTLE,
-            "font": {"color": "#1E293B", "size": 13},
-        },
         showlegend=False,
     )
     fig.update_xaxes(
@@ -83,17 +77,16 @@ def prepare_financial_area_chart(data, x_col, y_col, color):
         linecolor=COLOR_GRID_SUBTLE,
     )
     fig.update_yaxes(
-        showgrid=True,
-        gridcolor=COLOR_GRID_SUBTLE,
+        showgrid=False,
         zeroline=False,
         ticksuffix="\u20ac",
         tickfont={"color": COLOR_TEXT_MUTED},
         linecolor=COLOR_GRID_SUBTLE,
     )
-    return prepare_chart(fig)
+    return prepare_chart(fig, is_dark=is_dark)
 
 
-def render_saldo_global(usuario):
+def render_saldo_global(usuario, is_dark=False):
     df_tx = cargar_datos("transacciones", usuario)
     df_inv = cargar_datos("inversiones", usuario)
     saldo_efectivo = df_tx["importe"].sum() if not df_tx.empty else 0.0
@@ -139,7 +132,7 @@ def render_saldo_global(usuario):
                         hole=0.4,
                         color_discrete_sequence=CHART_COLORS,
                     )
-                    ui.plotly(prepare_chart(fig)).classes("plotly-chart")
+                    ui.plotly(prepare_chart(fig, is_dark=is_dark)).classes("plotly-chart")
                 else:
                     ui.label("No hay saldo positivo en las cuentas.").classes("text-gray-500")
             else:
@@ -155,7 +148,7 @@ def render_saldo_global(usuario):
                     hole=0.4,
                     color_discrete_sequence=CHART_COLORS,
                 )
-                ui.plotly(prepare_chart(fig)).classes("plotly-chart")
+                ui.plotly(prepare_chart(fig, is_dark=is_dark)).classes("plotly-chart")
             else:
                 ui.label("Aún no hay inversiones registradas.").classes("text-gray-500")
 
@@ -164,7 +157,7 @@ def render_saldo_global(usuario):
             ui.label("Liquidez total por fecha").classes("section-title")
             liquidez = calcular_liquidez_por_fecha(df_tx)
             if not liquidez.empty:
-                fig = prepare_financial_area_chart(liquidez, "Fecha", "Liquidez", COLOR_PRIMARY)
+                fig = prepare_financial_area_chart(liquidez, "Fecha", "Liquidez", COLOR_PRIMARY, is_dark=is_dark)
                 ui.plotly(fig).classes("plotly-chart")
             else:
                 ui.label("Aún no hay transacciones registradas.").classes("text-gray-500")
@@ -173,7 +166,7 @@ def render_saldo_global(usuario):
             patrimonio = calcular_patrimonio_total_por_fecha(df_tx, df_inv)
             if not patrimonio.empty:
                 fig = prepare_financial_area_chart(
-                    patrimonio, "Fecha", "Patrimonio total", COLOR_POSITIVE
+                    patrimonio, "Fecha", "Patrimonio total", COLOR_POSITIVE, is_dark=is_dark
                 )
                 ui.plotly(fig).classes("plotly-chart")
             else:

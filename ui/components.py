@@ -1,7 +1,7 @@
 import math
 import sqlite3
 
-from nicegui import ui
+from nicegui import app, ui
 
 from db.queries import (
     actualizar_transaccion,
@@ -14,6 +14,21 @@ from db.queries import (
     usos_catalogo,
 )
 from services.analytics import filtrar_transacciones, opciones_con_historial
+
+
+FIELD_DARK_CLASSES = "dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700"
+
+
+def quasar_dark_props(props="", is_dark=None):
+    props = (props or "").strip()
+    if is_dark is None:
+        try:
+            is_dark = bool(app.storage.user.get("dark_mode", False))
+        except RuntimeError:
+            is_dark = False
+    if is_dark and "dark" not in props.split():
+        props = f"{props} dark".strip()
+    return props
 
 
 def formato_numero(valor, decimales=2, signed=False, sufijo="", trim_zeros=False):
@@ -48,9 +63,9 @@ def formato_unidades(valor, decimales=6):
 
 def color_por_signo(valor):
     if valor > 0:
-        return "text-positive"
+        return "text-positive dark:text-emerald-400"
     if valor < 0:
-        return "text-negative"
+        return "text-negative dark:text-rose-400"
     return "text-main"
 
 
@@ -62,11 +77,49 @@ def color_hex_por_signo(valor):
     return "#1E293B"
 
 
+def aplicar_tema_grafica(fig, is_dark: bool):
+    text_color = "#94A3B8" if is_dark else "#1E293B"
+    grid_color = "rgba(255,255,255,0.05)" if is_dark else "#F8FAFC"
+    hover_bg = "#1E293B" if is_dark else "#FFFFFF"
+    template = "plotly_dark" if is_dark else "plotly_white"
+
+    fig.update_layout(
+        template=template,
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font={"color": text_color},
+        legend={"font": {"color": text_color}},
+        hoverlabel={
+            "bgcolor": hover_bg,
+            "bordercolor": grid_color,
+            "font": {"color": text_color, "size": 13},
+        },
+    )
+    fig.update_xaxes(
+        showgrid=False,
+        zeroline=False,
+        tickfont={"color": text_color},
+        title_font={"color": text_color},
+        linecolor=grid_color,
+        zerolinecolor=grid_color,
+    )
+    fig.update_yaxes(
+        showgrid=False,
+        zeroline=False,
+        tickfont={"color": text_color},
+        title_font={"color": text_color},
+        gridcolor=grid_color,
+        linecolor=grid_color,
+        zerolinecolor=grid_color,
+    )
+    return fig
+
+
 def color_por_tipo(tipo):
     if tipo == "Ingreso":
-        return "text-positive"
+        return "text-positive dark:text-emerald-400"
     if tipo == "Gasto":
-        return "text-negative"
+        return "text-negative dark:text-rose-400"
     return "text-primary"
 
 
@@ -152,7 +205,9 @@ def open_catalog_editor_dialog(
 ):
     with ui.dialog() as dialog, ui.card().classes("dialog-card catalog-dialog"):
         ui.label(titulo).classes("text-2xl font-semibold")
-        nuevo_valor = ui.input(input_label).classes("w-full")
+        nuevo_valor = ui.input(input_label).props(quasar_dark_props("outlined dense")).classes(
+            f"w-full {FIELD_DARK_CLASSES}"
+        )
 
         @ui.refreshable
         def render_catalog():
@@ -230,21 +285,34 @@ def open_edit_transaction_dialog(row, refresh, usuario):
 
     with ui.dialog() as dialog, ui.card().classes("dialog-card wide-dialog rounded-2xl"):
         ui.label("Editar movimiento").classes("text-xl font-semibold")
-        fecha_input = ui.input("Fecha", value=str(row["fecha"])).props("type=date").classes("w-full")
+        fecha_input = ui.input("Fecha", value=str(row["fecha"])).props(
+            quasar_dark_props("type=date outlined dense")
+        ).classes(f"w-full {FIELD_DARK_CLASSES}")
         importe_input = ui.number(
             "Importe (€) - Positivo: Ingreso / Negativo: Gasto",
             value=float(row["importe"]),
             step=1,
-        ).classes("w-full signed-amount-input")
+        ).props(quasar_dark_props("outlined dense")).classes(
+            f"w-full signed-amount-input {FIELD_DARK_CLASSES}"
+        )
         importe_input.on_value_change(lambda e: actualizar_color_importe(importe_input, e.value))
         actualizar_color_importe(importe_input)
-        descripcion_input = ui.input("Descripción", value=row["descripcion"] or "").classes("w-full")
+        descripcion_input = ui.input("Descripción", value=row["descripcion"] or "").classes(
+            f"w-full {FIELD_DARK_CLASSES}"
+        )
 
         with ui.row().classes("w-full gap-3"):
-            cuenta_select = ui.select(opciones_cuenta, label="Cuenta", value=row["cuenta"]).classes("flex-1")
-            nueva_cuenta = ui.input("Nueva cuenta").classes("flex-1")
-            sector_select = ui.select(opciones_sector, label="Sector", value=row["sector"]).classes("flex-1")
-            nuevo_sector = ui.input("Nuevo sector").classes("flex-1")
+            cuenta_select = ui.select(opciones_cuenta, label="Cuenta", value=row["cuenta"]).classes(
+                f"flex-1 {FIELD_DARK_CLASSES}"
+            )
+            nueva_cuenta = ui.input("Nueva cuenta").classes(f"flex-1 {FIELD_DARK_CLASSES}")
+            sector_select = ui.select(opciones_sector, label="Sector", value=row["sector"]).classes(
+                f"flex-1 {FIELD_DARK_CLASSES}"
+            )
+            nuevo_sector = ui.input("Nuevo sector").classes(f"flex-1 {FIELD_DARK_CLASSES}")
+
+        for field in (descripcion_input, cuenta_select, nueva_cuenta, sector_select, nuevo_sector):
+            field.props(quasar_dark_props("outlined dense"))
 
         nueva_cuenta.set_visibility(cuenta_select.value == "Otra")
         nuevo_sector.set_visibility(sector_select.value == "Otro")
@@ -304,8 +372,16 @@ def open_sector_breakdown_dialog(df_tx, sector, fecha_inicio, fecha_fin=None):
     with ui.dialog() as dialog, ui.card().classes("dialog-card wide-dialog"):
         ui.label(f"Desglose: {sector}").classes("text-xl font-semibold")
         with ui.row().classes("w-full gap-3"):
-            metric_card("Gastos", formato_euros_sin_signo(abs(gastos["importe"].sum())), "text-red-700")
-            metric_card("Ingresos", formato_euros_sin_signo(ingresos["importe"].sum()), "text-green-700")
+            metric_card(
+                "Gastos",
+                formato_euros_sin_signo(abs(gastos["importe"].sum())),
+                "text-red-700 dark:text-rose-400",
+            )
+            metric_card(
+                "Ingresos",
+                formato_euros_sin_signo(ingresos["importe"].sum()),
+                "text-green-700 dark:text-emerald-400",
+            )
             metric_card("Balance", formato_euros(movimientos["importe"].sum()), color_por_signo(movimientos["importe"].sum()))
 
         def render_detail(title, df):

@@ -7,11 +7,13 @@ from nicegui import ui
 from db.queries import cargar_datos, cargar_preferencia_usuario, guardar_preferencia_usuario
 from services.analytics import normalizar_sector, primer_dia_mes_anterior, resumen_gasto_por_sector
 from ui.components import (
+    aplicar_tema_grafica,
     color_por_signo,
     formato_euros,
     formato_euros_sin_signo,
     metric_card,
     open_sector_breakdown_dialog,
+    quasar_dark_props,
 )
 
 
@@ -63,7 +65,7 @@ def _cargar_filtros_analisis(usuario, df_tx):
     return filtros
 
 
-def render_analisis_gasto(usuario):
+def render_analisis_gasto(usuario, is_dark=False):
     df_tx = cargar_datos("transacciones", usuario)
     filtros = _cargar_filtros_analisis(usuario, df_tx)
 
@@ -101,11 +103,15 @@ def render_analisis_gasto(usuario):
                 fecha_inicio_input = ui.input(
                     "Fecha de inicio",
                     value=filtros["fecha_inicio"],
-                ).props("type=date").classes("flex-1")
+                ).props(quasar_dark_props("type=date outlined dense")).classes(
+                    "flex-1 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700"
+                )
                 fecha_fin_input = ui.input(
                     "Fecha de fin",
                     value=filtros["fecha_fin"],
-                ).props("type=date").classes("flex-1")
+                ).props(quasar_dark_props("type=date outlined dense")).classes(
+                    "flex-1 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700"
+                )
 
             ui.label("Sectores").classes("text-sm font-semibold text-gray-700")
             sector_checks = {}
@@ -215,13 +221,13 @@ def render_analisis_gasto(usuario):
             metric_card(
                 "Gastos",
                 formato_euros_sin_signo(total_gastos),
-                "text-red-700",
+                "text-red-700 dark:text-rose-400",
                 icon="arrow_downward",
             )
             metric_card(
                 "Ingresos",
                 formato_euros_sin_signo(total_ingresos),
-                "text-green-700",
+                "text-green-700 dark:text-emerald-400",
                 icon="arrow_upward",
             )
             metric_card(
@@ -237,14 +243,20 @@ def render_analisis_gasto(usuario):
                 ui.label("Resumen por sector").classes("section-title")
                 with ui.card().classes("table-card analysis-top-card p-0 w-full"):
                     with ui.element("div").classes("w-full h-full overflow-x-auto overflow-y-auto p-3"):
-                        with ui.element("div").classes("table-header sector-table sticky top-0 bg-white z-20"):
+                        with ui.element("div").classes(
+                            "table-header sector-table sticky top-0 bg-white dark:bg-slate-800 z-20"
+                        ):
                             for label in ["Sector", "Gastos", "Ingresos", "Balance", ""]:
                                 ui.label(label).classes("font-semibold")
                         for _, row in resumen.iterrows():
                             with ui.element("div").classes("table-row sector-table"):
                                 ui.label(row["Sector"])
-                                ui.label(formato_euros_sin_signo(row["Gastos"])).classes("font-semibold text-red-700 text-right")
-                                ui.label(formato_euros_sin_signo(row["Ingresos"])).classes("font-semibold text-green-700 text-right")
+                                ui.label(formato_euros_sin_signo(row["Gastos"])).classes(
+                                    "font-semibold text-red-700 dark:text-rose-400 text-right"
+                                )
+                                ui.label(formato_euros_sin_signo(row["Ingresos"])).classes(
+                                    "font-semibold text-green-700 dark:text-emerald-400 text-right"
+                                )
                                 ui.label(formato_euros(row["Balance"])).classes(f"font-semibold {color_por_signo(row['Balance'])} text-right")
                                 ui.button(
                                     icon="chevron_right",
@@ -271,11 +283,8 @@ def render_analisis_gasto(usuario):
                             hole=0.45,
                             color_discrete_sequence=CHART_COLORS,
                         )
-                        fig.update_layout(
-                            plot_bgcolor="rgba(0,0,0,0)",
-                            paper_bgcolor="rgba(0,0,0,0)",
-                            separators=",.",
-                        )
+                        fig.update_layout(separators=",.")
+                        aplicar_tema_grafica(fig, is_dark)
                         ui.plotly(fig).classes("plotly-chart analysis-plotly")
 
         ui.label("Balance por sector").classes("section-title")
@@ -293,13 +302,12 @@ def render_analisis_gasto(usuario):
             )
             fig.update_yaxes(ticksuffix="€")
             fig.update_xaxes(showgrid=False)
-            fig.update_yaxes(showgrid=True, gridcolor="#F8FAFC")
+            fig.update_yaxes(showgrid=False)
             fig.update_layout(
                 legend_title_text="",
-                plot_bgcolor="rgba(0,0,0,0)",
-                paper_bgcolor="rgba(0,0,0,0)",
                 separators=",.",
             )
+            aplicar_tema_grafica(fig, is_dark)
             ui.plotly(fig).classes("plotly-chart analysis-plotly")
 
     render_resultados()

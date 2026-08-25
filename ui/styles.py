@@ -31,6 +31,8 @@ def add_styles():
             --color-bg-surface: #FFFFFF;
             --color-text-main: #1E293B;
             --color-text-muted: #64748B;
+            --color-border: #E2E8F0;
+            --color-border-strong: #CBD5E1;
             --color-primary: #2563EB;
             --color-secondary: #94A3B8;
             --color-interactive: #EFF6FF;
@@ -48,7 +50,110 @@ def add_styles():
             --q-positive: #10B981;
             --q-negative: #F43F5E;
         }
-        body { background: var(--color-bg-base); color: var(--color-text-main); }
+        body.body--dark {
+            --color-bg-base: #0F172A;
+            --color-bg-surface: #1E293B;
+            --color-text-main: #F1F5F9;
+            --color-text-muted: #94A3B8;
+            --color-border: #334155;
+            --color-border-strong: #475569;
+            --color-interactive: rgba(37, 99, 235, 0.16);
+            --color-positive: #34D399;
+            --color-negative: #FB7185;
+            --color-positive-bg: rgba(16, 185, 129, 0.12);
+            --color-negative-bg: rgba(244, 63, 94, 0.12);
+        }
+        body { background: var(--color-bg-base); color: var(--color-text-main); transition: background-color 220ms ease, color 220ms ease; }
+        body.body--dark .q-page,
+        body.body--dark .nicegui-content {
+            background: var(--color-bg-base);
+            color: var(--color-text-main);
+        }
+        body.body--dark .q-card,
+        body.body--dark .q-menu {
+            background: var(--color-bg-surface);
+            color: var(--color-text-main);
+            border-color: rgba(51, 65, 85, 0.5);
+        }
+        body.body--dark .q-card {
+            border-width: 1px;
+            border-style: solid;
+            box-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
+        }
+        body.body--dark .q-dialog .q-card {
+            border: 1px solid rgba(51, 65, 85, 0.5);
+        }
+        body.body--dark .q-field__control,
+        body.body--dark .q-field--outlined .q-field__control,
+        body.body--dark .q-field--filled .q-field__control,
+        body.body--dark .q-field--standout .q-field__control {
+            background: #0F172A !important;
+            color: #F1F5F9 !important;
+        }
+        body.body--dark .q-field__control::before {
+            border-color: #334155 !important;
+        }
+        body.body--dark .q-field__control::after {
+            border-color: var(--color-primary) !important;
+        }
+        body.body--dark .q-field__native,
+        body.body--dark .q-field__input,
+        body.body--dark .q-field__prefix,
+        body.body--dark .q-field__suffix,
+        body.body--dark .q-field__label,
+        body.body--dark .q-select__dropdown-icon,
+        body.body--dark .q-placeholder {
+            color: #F1F5F9 !important;
+        }
+        body.body--dark .q-field--outlined .q-field__label {
+            background: #0F172A !important;
+            border-radius: 6px;
+            padding: 0 4px;
+            z-index: 1;
+        }
+        body.body--dark .q-card .q-field--outlined .q-field__label,
+        body.body--dark .q-dialog .q-field--outlined .q-field__label {
+            background: var(--color-bg-surface) !important;
+        }
+        body.body--dark .q-field--outlined.transaction-entry-field .q-field__label,
+        body.body--dark .q-field--outlined.operation-date-input .q-field__label,
+        body.body--dark .q-field--outlined.operation-number-input .q-field__label,
+        body.body--dark .q-field--outlined.investment-entry-field .q-field__label {
+            background: #0F172A !important;
+        }
+        body.body--dark .q-field__native::placeholder,
+        body.body--dark .q-field__input::placeholder {
+            color: #94A3B8 !important;
+            opacity: 0.8;
+        }
+        body.body--dark .q-field--disabled .q-field__control {
+            background: #1E293B !important;
+        }
+        body.body--dark .q-menu,
+        body.body--dark .q-virtual-scroll__content,
+        body.body--dark .q-item {
+            background: #1E293B;
+            color: #F1F5F9;
+        }
+        body.body--dark .text-slate-900,
+        body.body--dark .text-\\[\\#1E293B\\] {
+            color: #F1F5F9 !important;
+        }
+        body.body--dark .text-slate-500,
+        body.body--dark .text-\\[\\#64748B\\] {
+            color: #94A3B8 !important;
+        }
+        body.body--dark .bg-white,
+        body.body--dark .bg-\\[\\#FFFFFF\\] {
+            background-color: #1E293B !important;
+        }
+        body.body--dark .bg-slate-50,
+        body.body--dark .bg-\\[\\#F8FAFC\\] {
+            background-color: #0F172A !important;
+        }
+        body.body--dark .border-slate-200 {
+            border-color: #334155 !important;
+        }
         .text-positive { color: var(--color-positive) !important; }
         .text-negative { color: var(--color-negative) !important; }
         .text-primary { color: var(--color-primary) !important; }
@@ -57,6 +162,14 @@ def add_styles():
         .text-green-700 { color: var(--color-positive) !important; }
         .text-red-700 { color: var(--color-negative) !important; }
         .text-blue-700 { color: var(--color-primary) !important; }
+        body.body--dark .text-positive,
+        body.body--dark .text-green-700 {
+            color: #34D399 !important;
+        }
+        body.body--dark .text-negative,
+        body.body--dark .text-red-700 {
+            color: #FB7185 !important;
+        }
         .text-gray-500,
         .text-gray-600,
         .text-gray-700 { color: var(--color-text-muted) !important; }
@@ -71,7 +184,7 @@ def add_styles():
             gap: 8px;
             padding: 8px;
             border-radius: 999px;
-            background: #FFFFFF;
+            background: var(--color-bg-surface);
             box-shadow: 0 10px 28px rgba(15, 23, 42, 0.13);
             overflow-x: auto;
         }
@@ -143,7 +256,7 @@ def add_styles():
             flex: 1;
             border-radius: 16px;
             background: var(--color-bg-surface);
-            border: 1px solid #DBEAFE;
+            border: 1px solid var(--color-border);
             box-shadow: 0 8px 22px rgba(15, 23, 42, 0.07);
         }
         .metric-label { font-size: 13px; color: var(--color-text-muted); }
@@ -181,7 +294,7 @@ def add_styles():
             min-width: 420px;
             border-radius: 16px;
             background: var(--color-bg-surface);
-            border: 1px solid #E0ECFF;
+            border: 1px solid var(--color-border);
             box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
         }
         .analysis-chart-card {
@@ -204,8 +317,18 @@ def add_styles():
             width: 100%;
             border-radius: 16px;
             background: var(--color-bg-surface);
-            border: 1px solid #E0ECFF;
+            border: 1px solid var(--color-border);
             box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+        }
+        body.body--dark .metric-card,
+        body.body--dark .chart-card,
+        body.body--dark .form-card,
+        body.body--dark .table-card,
+        body.body--dark .dialog-card,
+        body.body--dark .setup-step-card,
+        body.body--dark .investment-valuation-card,
+        body.body--dark .history-table-card {
+            border: 1px solid rgba(51, 65, 85, 0.5) !important;
         }
         .table-card { overflow-x: auto; }
         .table-header, .table-row {
@@ -268,7 +391,7 @@ def add_styles():
         .current-assets-table > *:not(.current-assets-row):not(.current-assets-header-row) {
             min-width: 0;
             padding: 9px 6px;
-            border-bottom: 1px solid #E2E8F0;
+            border-bottom: 1px solid var(--color-border);
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -282,9 +405,9 @@ def add_styles():
             position: sticky;
             top: 0;
             z-index: 20;
-            background: #FFFFFF;
-            border-bottom: 1px solid #E2E8F0;
-            box-shadow: 0 1px 0 rgba(226, 232, 240, 0.95);
+            background: var(--color-bg-surface);
+            border-bottom: 1px solid var(--color-border);
+            box-shadow: 0 1px 0 var(--color-border);
         }
         .current-assets-header-row > * {
             min-width: 0;
@@ -292,12 +415,12 @@ def add_styles():
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
-            background: #FFFFFF;
+            background: var(--color-bg-surface);
         }
         .current-assets-table-header {
             color: var(--color-text-muted);
             font-weight: 700;
-            background: #FFFFFF !important;
+            background: var(--color-bg-surface) !important;
         }
         .current-assets-row {
             grid-column: 1 / -1;
@@ -308,7 +431,7 @@ def add_styles():
             z-index: 0;
             min-width: 0;
             min-height: 44px;
-            border-bottom: 1px solid #E2E8F0;
+            border-bottom: 1px solid var(--color-border);
             border-radius: 6px;
             transition: background-color 120ms ease, box-shadow 120ms ease;
         }
@@ -348,8 +471,8 @@ def add_styles():
             padding-right: 2px !important;
         }
         .table-header > *, .table-row > * { width: 100%; min-width: 0; }
-        .table-header { color: var(--color-text-muted); border-bottom: 1px solid #E2E8F0; }
-        .table-row { border-bottom: 1px solid #E2E8F0; min-height: 44px; }
+        .table-header { color: var(--color-text-muted); border-bottom: 1px solid var(--color-border); }
+        .table-row { border-bottom: 1px solid var(--color-border); min-height: 44px; }
         .date-group { margin-top: 16px; padding: 8px 12px; border-left: 4px solid var(--color-primary); background: var(--color-interactive); font-weight: 750; width: 100%; }
         .signed-amount-input.amount-positive .q-field__native,
         .signed-amount-input.amount-positive .q-field__label {
@@ -360,6 +483,14 @@ def add_styles():
         .signed-amount-input.amount-negative .q-field__label {
             color: var(--color-negative) !important;
             font-weight: 750;
+        }
+        body.body--dark .signed-amount-input.amount-positive .q-field__native,
+        body.body--dark .signed-amount-input.amount-positive .q-field__label {
+            color: #34D399 !important;
+        }
+        body.body--dark .signed-amount-input.amount-negative .q-field__native,
+        body.body--dark .signed-amount-input.amount-negative .q-field__label {
+            color: #FB7185 !important;
         }
         .dialog-card { min-width: 520px; max-width: calc(100vw - 48px); gap: 14px; border-radius: 16px; }
         .wide-dialog { width: 980px; }
@@ -392,6 +523,18 @@ def add_styles():
         .history-table-card {
             overflow: visible !important;
             max-height: none !important;
+        }
+        body.body--dark .history-dialog-body,
+        body.body--dark .history-dialog-body .q-tab-panel,
+        body.body--dark .history-dialog-body .q-panel,
+        body.body--dark .history-table-card,
+        body.body--dark .history-table-scroll,
+        body.body--dark .history-table-scroll .table-header,
+        body.body--dark .history-table-scroll .table-row {
+            background: transparent !important;
+        }
+        body.body--dark .history-table-card {
+            background: #1E293B !important;
         }
         .history-table-scroll {
             width: 100%;
@@ -464,7 +607,7 @@ def add_styles():
         .asset-detail-metric {
             min-width: 0;
             padding: 10px 12px;
-            border: 1px solid #E2E8F0;
+            border: 1px solid var(--color-border);
             border-radius: 14px;
             background: var(--color-bg-base);
         }
@@ -503,13 +646,25 @@ def add_styles():
             min-height: 30px;
             padding: 0 14px;
             border-radius: 9999px;
-            color: #64748B;
+            color: var(--color-text-muted);
             font-weight: 700;
         }
         .asset-chart-tabs .q-tab--active {
-            background: #FFFFFF;
-            color: #1E293B;
+            background: var(--color-bg-surface);
+            color: var(--color-text-main);
             box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+        }
+        body.body--dark .asset-chart-tabs {
+            background: #0F172A !important;
+            border: 1px solid rgba(51, 65, 85, 0.5);
+        }
+        body.body--dark .asset-chart-tabs .q-tab {
+            color: #94A3B8 !important;
+        }
+        body.body--dark .asset-chart-tabs .q-tab--active {
+            background: #334155 !important;
+            color: #FFFFFF !important;
+            box-shadow: none;
         }
         .operation-type-tabs .q-tabs__content {
             width: 100%;
@@ -528,6 +683,11 @@ def add_styles():
             font-weight: 700;
             box-shadow: none;
         }
+        body.body--dark .operation-type-tabs .q-tab:nth-child(1).q-tab--active {
+            background: rgba(52, 211, 153, 0.16) !important;
+            color: #34D399 !important;
+            border-color: rgba(52, 211, 153, 0.28) !important;
+        }
         .operation-type-tabs .q-tab:nth-child(2).q-tab--active {
             background: #FFF1F2;
             color: #BE123C;
@@ -535,27 +695,108 @@ def add_styles():
             font-weight: 700;
             box-shadow: none;
         }
+        body.body--dark .operation-type-tabs .q-tab:nth-child(2).q-tab--active {
+            background: rgba(251, 113, 133, 0.16) !important;
+            color: #FB7185 !important;
+            border-color: rgba(251, 113, 133, 0.28) !important;
+        }
         .auth-mode-tabs .q-tabs__content {
             width: 100%;
         }
         .auth-mode-tabs .q-tab {
             flex: 1 1 0;
         }
+        .transaction-mode-tabs .q-tabs__content {
+            width: 100%;
+        }
+        .transaction-mode-tabs .q-tab {
+            flex: 1 1 0;
+        }
+        .transaction-entry-field .q-field__control {
+            border-radius: 12px;
+            background: #F1F5F9;
+        }
+        body.body--dark .transaction-entry-field .q-field__control {
+            background: #0F172A !important;
+        }
+        .transaction-entry-field .q-field__control::before {
+            border-color: #E2E8F0;
+        }
+        body.body--dark .transaction-entry-field .q-field__control::before {
+            border-color: #334155 !important;
+        }
+        body.body--dark .transaction-entry-field .q-field__prepend .q-icon,
+        body.body--dark .transaction-entry-field .q-field__append .q-icon {
+            color: #94A3B8 !important;
+        }
+        .transaction-entry-field.q-field--focused .q-field__control {
+            background: var(--color-bg-surface);
+        }
+        .transaction-entry-field.q-field--focused .q-field__control::after {
+            border-color: var(--color-primary);
+            border-width: 2px;
+        }
+        .transaction-hero-amount .q-field__control {
+            min-height: 74px;
+            border-radius: 16px;
+            background: transparent;
+        }
+        body.body--dark .transaction-hero-amount .q-field__control {
+            background: transparent !important;
+        }
+        .transaction-hero-amount .q-field__control::before,
+        .transaction-hero-amount .q-field__control::after {
+            border: 0;
+        }
+        .transaction-hero-amount .q-field__native,
+        .transaction-hero-amount .q-field__suffix {
+            font-variant-numeric: tabular-nums;
+        }
+        .transaction-hero-amount input[type="number"]::-webkit-outer-spin-button,
+        .transaction-hero-amount input[type="number"]::-webkit-inner-spin-button,
+        .operation-number-input input[type="number"]::-webkit-outer-spin-button,
+        .operation-number-input input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .transaction-hero-amount input[type="number"],
+        .operation-number-input input[type="number"] {
+            -moz-appearance: textfield;
+            appearance: textfield;
+        }
+        .transaction-hero-amount .q-field__suffix {
+            color: #94A3B8;
+            font-weight: 700;
+            padding-left: 8px;
+            transform: translate(-2px, 1px);
+        }
         .operation-date-input .q-field__control {
             border-radius: 8px;
-            background: #F8FAFC;
+            background: var(--color-bg-base);
         }
         .operation-number-input .q-field__control {
             border-radius: 12px;
-            background: #F8FAFC;
+            background: var(--color-bg-base);
         }
         .operation-date-input .q-field__control::before,
         .operation-number-input .q-field__control::before {
             border-color: #E2E8F0;
         }
+        body.body--dark .operation-date-input .q-field__control::before,
+        body.body--dark .operation-number-input .q-field__control::before {
+            border-color: #334155 !important;
+        }
+        body.body--dark .operation-date-input .q-field__prepend .q-icon,
+        body.body--dark .operation-date-input .q-field__append .q-icon {
+            color: #94A3B8 !important;
+        }
+        body.body--dark input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(70%) sepia(11%) saturate(418%) hue-rotate(176deg) brightness(92%) contrast(89%);
+            opacity: 0.9;
+        }
         .operation-date-input.q-field--focused .q-field__control,
         .operation-number-input.q-field--focused .q-field__control {
-            background: #FFFFFF;
+            background: var(--color-bg-surface);
         }
         .operation-date-input.q-field--focused .q-field__control::after,
         .operation-number-input.q-field--focused .q-field__control::after {
@@ -592,7 +833,7 @@ def add_styles():
             min-height: 0;
             overflow-y: auto;
             overflow-x: hidden;
-            border: 1px solid #E2E8F0;
+            border: 1px solid var(--color-border);
             border-radius: 14px;
         }
         .asset-detail-values-table {
@@ -606,7 +847,7 @@ def add_styles():
             max-height: 260px;
             overflow-y: auto;
             overflow-x: auto;
-            border: 1px solid #E2E8F0;
+            border: 1px solid var(--color-border);
             border-radius: 14px;
         }
         .asset-detail-operations-table {
@@ -620,7 +861,7 @@ def add_styles():
         .asset-detail-operations-table > * {
             min-width: 0;
             padding: 9px 8px;
-            border-bottom: 1px solid #E2E8F0;
+            border-bottom: 1px solid var(--color-border);
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -703,8 +944,8 @@ def add_styles():
         .investment-entry-action > * { width: auto; }
         .investment-entry-check-cell { display: flex; justify-content: center; padding: 0; }
         .investment-entry-check-cell > * { width: auto; }
-        .investment-entry-header { color: var(--color-text-muted); border-bottom: 1px solid #E2E8F0; font-weight: 700; }
-        .investment-entry-data { border-bottom: 1px solid #E2E8F0; min-height: 64px; }
+        .investment-entry-header { color: var(--color-text-muted); border-bottom: 1px solid var(--color-border); font-weight: 700; }
+        .investment-entry-data { border-bottom: 1px solid var(--color-border); min-height: 64px; }
         .asset-edit-dialog { width: min(1500px, calc(100vw - 48px)) !important; max-width: calc(100vw - 48px) !important; max-height: 92vh; overflow-y: auto; overflow-x: auto; }
         .asset-edit-row {
             display: grid;
@@ -774,7 +1015,7 @@ def add_styles():
             align-items: center;
             gap: 12px;
             padding: 8px 6px;
-            border-bottom: 1px solid #E2E8F0;
+            border-bottom: 1px solid var(--color-border);
         }
         .catalog-list { width: 100%; max-height: 56vh; overflow-y: auto; }
         .setup-dialog { width: 820px; max-width: 96vw; max-height: 92vh; overflow-y: auto; }

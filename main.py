@@ -7,6 +7,7 @@ from pathlib import Path
 from config import NICEGUI_STORAGE_DIR, ensure_private_dirs, get_storage_secret
 from db.connection import create_user, init_db, list_users, verify_user
 from db.queries import configurar_catalogos_iniciales
+from ui.components import quasar_dark_props
 from ui.styles import add_styles
 from ui.views.analysis import render_analisis_gasto
 from ui.views.dashboard import render_saldo_global
@@ -197,7 +198,9 @@ def open_initial_setup_dialog(on_done):
 
                             ui.button(icon="close", on_click=remove_item).props("flat dense round").classes("setup-chip-remove")
 
-                new_item_input = ui.input(f"Añadir {step['label'].lower()}").classes("w-full")
+                new_item_input = ui.input(f"Añadir {step['label'].lower()}").props(
+                    quasar_dark_props("outlined dense")
+                ).classes("w-full dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700")
 
                 def add_item():
                     item = (new_item_input.value or "").strip()
@@ -245,12 +248,17 @@ def render_auth_card(on_login_callback, on_register_callback, initial_mode="logi
     mode = {"value": initial_mode if initial_mode in {"login", "register"} else "login"}
     password_visible = {"value": False}
 
-    with ui.element("div").classes("min-h-screen w-full bg-slate-50 flex items-center justify-center p-6"):
-        with ui.card().classes("w-full max-w-sm bg-white p-8 rounded-2xl shadow-2xl shadow-slate-200/60 gap-6"):
+    with ui.element("div").classes(
+        "min-h-screen w-full bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-6"
+    ):
+        with ui.card().classes(
+            "w-full max-w-sm bg-white dark:bg-slate-800 p-8 rounded-2xl "
+            "shadow-2xl shadow-slate-200/60 dark:shadow-black/30 gap-6"
+        ):
             with ui.column().classes("w-full items-center gap-2 text-center"):
                 ui.image("/static/icons/favicon.svg").classes("w-12 h-12")
                 with ui.row().classes("items-baseline justify-center gap-0"):
-                    ui.label("Finanz").classes("text-3xl font-bold text-[#1E293B]")
+                    ui.label("Finanz").classes("text-3xl font-bold text-slate-900 dark:text-slate-100")
                     ui.label("APP").classes("text-3xl font-bold text-[#2563EB]")
                 ui.label("Gestión patrimonial inteligente").classes("text-sm text-slate-400")
 
@@ -290,7 +298,7 @@ def render_auth_card(on_login_callback, on_register_callback, initial_mode="logi
                     )
 
                 with ui.tabs(value=mode["value"]).classes(
-                    "asset-chart-tabs auth-mode-tabs bg-[#F8FAFC] rounded-full p-1 w-full"
+                    "asset-chart-tabs auth-mode-tabs bg-[#F8FAFC] dark:bg-slate-900 rounded-full p-1 w-full"
                 ).props('dense no-caps active-color="dark" indicator-color="transparent"') as auth_tabs:
                     ui.tab("login", label="Iniciar sesión")
                     ui.tab("register", label="Crear usuario")
@@ -298,14 +306,14 @@ def render_auth_card(on_login_callback, on_register_callback, initial_mode="logi
 
                 with ui.column().classes("w-full gap-4"):
                     user_input = ui.input("Usuario").props(
-                        'outlined color=blue-8 input-class="text-lg"'
-                    ).classes("w-full rounded-xl")
+                        quasar_dark_props('outlined color=blue-8 input-class="text-lg"')
+                    ).classes("w-full rounded-xl dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700")
                     with user_input.add_slot("prepend"):
                         ui.icon("person").classes("text-slate-400")
 
                     password_input = ui.input("Contraseña", password=not password_visible["value"]).props(
-                        'outlined color=blue-8 input-class="text-lg"'
-                    ).classes("w-full rounded-xl")
+                        quasar_dark_props('outlined color=blue-8 input-class="text-lg"')
+                    ).classes("w-full rounded-xl dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700")
                     with password_input.add_slot("prepend"):
                         ui.icon("lock").classes("text-slate-400")
                     with password_input.add_slot("append"):
@@ -316,8 +324,8 @@ def render_auth_card(on_login_callback, on_register_callback, initial_mode="logi
 
                     if mode["value"] == "register":
                         confirm_input = ui.input("Confirmar Contraseña", password=True).props(
-                            'outlined color=blue-8 input-class="text-lg"'
-                        ).classes("w-full rounded-xl")
+                            quasar_dark_props('outlined color=blue-8 input-class="text-lg"')
+                        ).classes("w-full rounded-xl dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700")
                         with confirm_input.add_slot("prepend"):
                             ui.icon("lock_reset").classes("text-slate-400")
 
@@ -364,6 +372,7 @@ def handle_register(username, password):
 @ui.page("/login")
 def login():
     add_styles()
+    ui.dark_mode(value=bool(app.storage.user.get("dark_mode", False)))
     if sesion_autenticada():
         ui.navigate.to("/")
         return
@@ -373,6 +382,7 @@ def login():
 @ui.page("/register")
 def register():
     add_styles()
+    ui.dark_mode(value=bool(app.storage.user.get("dark_mode", False)))
     if sesion_autenticada():
         ui.navigate.to("/")
         return
@@ -387,50 +397,74 @@ def logout():
 @ui.page("/")
 def main(tab: str = "saldo"):
     add_styles()
+    dark = ui.dark_mode(value=bool(app.storage.user.get("dark_mode", False)))
     if not sesion_autenticada():
         ui.navigate.to("/login")
         return
 
     username = username_actual()
     user_initial = (username[:1] or "?").upper()
-    with ui.column().classes("app-shell w-full"):
+
+    def toggle_dark_mode(value=None):
+        target_value = not bool(dark.value) if value is None else bool(value)
+        if target_value != bool(dark.value):
+            dark.toggle()
+        app.storage.user["dark_mode"] = bool(dark.value)
+        if content is not None:
+            render_active_tab(active_tab["value"])
+
+    with ui.column().classes(
+        "app-shell w-full min-h-screen bg-slate-50 dark:bg-slate-900 "
+        "text-slate-900 dark:text-slate-100 transition-colors duration-300"
+    ):
         with ui.row().classes("items-center justify-between w-full"):
             with ui.row().classes("items-center gap-2"):
                 ui.html("""
                     <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <g transform="skewX(-12) translate(8, 0)">
-                        <rect x="2" y="4" width="6" height="24" rx="1.5" fill="#1E293B"/>
+                        <rect x="2" y="4" width="6" height="24" rx="1.5" fill="currentColor"/>
                         <rect x="10" y="4" width="16" height="6" rx="1.5" fill="#2563EB"/>
                         <rect x="10" y="14" width="10" height="6" rx="1.5" fill="#10B981"/>
                       </g>
                     </svg>
-                """)
+                """).classes("text-slate-900 dark:text-slate-100")
                 with ui.row().classes("gap-0 items-baseline text-xl"):
-                    ui.label("Finanz").classes("font-bold text-[#1E293B]")
+                    ui.label("Finanz").classes("font-bold text-slate-900 dark:text-slate-100")
                     ui.label("APP").classes("font-medium text-[#2563EB]")
-            with ui.button(user_initial).props("round unelevated").style(
-                "background-color: #EFF6FF; color: #2563EB;"
-            ):
-                with ui.menu().classes("rounded-2xl p-2 min-w-[210px]") as user_menu:
-                    ui.label(username).classes("px-3 pt-2 pb-1 text-sm font-bold text-[#1E293B]")
-                    ui.separator().classes("my-1 bg-[#E2E8F0]")
+            with ui.row().classes("items-center gap-2"):
+                with ui.button(user_initial).props("round unelevated").style(
+                    "background-color: #EFF6FF; color: #2563EB;"
+                ):
+                    with ui.menu().classes("rounded-2xl p-2 min-w-[210px] bg-white dark:bg-slate-800") as user_menu:
+                        ui.label(username).classes(
+                            "px-3 pt-2 pb-1 text-sm font-bold text-slate-900 dark:text-slate-100"
+                        )
+                        ui.separator().classes("my-1 bg-[#E2E8F0] dark:bg-slate-700")
 
-                    def open_preferences_from_menu():
-                        user_menu.close()
-                        with ui.context.client.content:
-                            open_preferences_drawer(username)
+                        def open_preferences_from_menu():
+                            user_menu.close()
+                            with ui.context.client.content:
+                                open_preferences_drawer(
+                                    username,
+                                    is_dark=lambda: bool(dark.value),
+                                    on_toggle_theme=toggle_dark_mode,
+                                )
 
-                    with ui.item(on_click=open_preferences_from_menu).classes("rounded-xl px-3 py-2 text-[#64748B]"):
-                        with ui.item_section().props("avatar"):
-                            ui.icon("settings").classes("text-[#64748B]")
-                        with ui.item_section():
-                            ui.label("Preferencias").classes("text-sm font-medium text-[#64748B]")
+                        with ui.item(on_click=open_preferences_from_menu).classes(
+                            "rounded-xl px-3 py-2 text-slate-500 dark:text-slate-400"
+                        ):
+                            with ui.item_section().props("avatar"):
+                                ui.icon("settings").classes("text-slate-500 dark:text-slate-400")
+                            with ui.item_section():
+                                ui.label("Preferencias").classes(
+                                    "text-sm font-medium text-slate-500 dark:text-slate-400"
+                                )
 
-                    with ui.item(on_click=logout).classes("rounded-xl px-3 py-2 text-[#F43F5E]"):
-                        with ui.item_section().props("avatar"):
-                            ui.icon("logout").classes("text-[#F43F5E]")
-                        with ui.item_section():
-                            ui.label("Cerrar sesión").classes("text-sm font-medium text-[#F43F5E]")
+                        with ui.item(on_click=logout).classes("rounded-xl px-3 py-2 text-[#F43F5E]"):
+                            with ui.item_section().props("avatar"):
+                                ui.icon("logout").classes("text-[#F43F5E]")
+                            with ui.item_section():
+                                ui.label("Cerrar sesión").classes("text-sm font-medium text-[#F43F5E]")
 
         nav_items = [
             ("saldo", "Saldo Global", "account_balance"),
@@ -460,7 +494,7 @@ def main(tab: str = "saldo"):
 
         @ui.refreshable
         def render_navigation():
-            with ui.row().classes("app-pill-nav rounded-full bg-white shadow-lg"):
+            with ui.row().classes("app-pill-nav rounded-full bg-white dark:bg-slate-800 shadow-lg"):
                 for key, label, icon in nav_items:
                     is_active = active_tab["value"] == key
                     item_classes = (
@@ -480,10 +514,18 @@ def main(tab: str = "saldo"):
                         ui.label(label).classes("app-pill-nav-label")
 
         renderers.update({
-            "saldo": lambda: render_saldo_global(username),
-            "movimientos": lambda: render_ingresos_gastos(lambda: render_active_tab("movimientos"), username),
-            "analisis": lambda: render_analisis_gasto(username),
-            "inversiones": lambda: render_inversiones(lambda: render_active_tab("inversiones"), username),
+            "saldo": lambda: render_saldo_global(username, is_dark=bool(dark.value)),
+            "movimientos": lambda: render_ingresos_gastos(
+                lambda: render_active_tab("movimientos"),
+                username,
+                is_dark=bool(dark.value),
+            ),
+            "analisis": lambda: render_analisis_gasto(username, is_dark=bool(dark.value)),
+            "inversiones": lambda: render_inversiones(
+                lambda: render_active_tab("inversiones"),
+                username,
+                is_dark=bool(dark.value),
+            ),
         })
 
         render_navigation()

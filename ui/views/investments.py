@@ -33,12 +33,14 @@ from services.analytics import (
 from services.asset_logos import obtener_logo_activo, sincronizar_logo_activo, url_avatar_fallback
 from services.market_prices import buscar_info_ticker_yahoo, obtener_valor_mercado
 from ui.components import (
+    aplicar_tema_grafica,
     color_por_signo,
     formato_euros,
     formato_euros_sin_signo,
     formato_numero,
     formato_porcentaje,
     formato_unidades,
+    quasar_dark_props,
     refresh_view,
 )
 
@@ -52,14 +54,14 @@ CHART_COLORS = ["#3B82F6", "#06B6D4", "#8B5CF6", "#F97316", "#F43F5E"]
 LINE_TYPE = "spline" # Options: "linear", "spline"
 
 
-def prepare_chart(fig, height=520):
+def prepare_chart(fig, height=520, is_dark=False):
     fig.update_layout(
         autosize=True,
         height=height,
         margin={"l": 24, "r": 24, "t": 48, "b": 24},
         separators=",.",
     )
-    return fig
+    return aplicar_tema_grafica(fig, is_dark)
 
 
 def formato_euros_hover(valor):
@@ -79,7 +81,7 @@ def url_catalog_avatar(nombre, size=128):
     )
 
 
-def build_investment_evolution_chart(evolucion):
+def build_investment_evolution_chart(evolucion, is_dark=False):
     chart_data = evolucion.copy()
     chart_data["Fecha"] = pd.to_datetime(chart_data["Fecha"])
     chart_data["Fecha hover"] = chart_data["Fecha"].dt.strftime("%d/%m/%Y")
@@ -109,14 +111,7 @@ def build_investment_evolution_chart(evolucion):
             name="Valor inicial",
             line={"color": COLOR_PRIMARY, "width": 3, "shape": LINE_TYPE, "smoothing": 0.4},
             marker={"color": COLOR_PRIMARY, "size": 8},
-            fill="tozeroy",
-            fillgradient={
-                "type": "vertical",
-                "colorscale": [
-                    [0, rgba_from_hex(COLOR_PRIMARY, 0.02)],
-                    [1, rgba_from_hex(COLOR_PRIMARY, 0.16)],
-                ],
-            },
+            fill=None,
             hovertemplate=(
                 "%{customdata[0]}<br>"
                 "Valor inicial: %{customdata[1]}<br>"
@@ -135,14 +130,7 @@ def build_investment_evolution_chart(evolucion):
             name="Valor actual",
             line={"color": COLOR_POSITIVE, "width": 3, "shape": LINE_TYPE, "smoothing": 0.4},
             marker={"color": COLOR_POSITIVE, "size": 8},
-            fill="tozeroy",
-            fillgradient={
-                "type": "vertical",
-                "colorscale": [
-                    [0, rgba_from_hex(COLOR_POSITIVE, 0.02)],
-                    [1, rgba_from_hex(COLOR_POSITIVE, 0.24)],
-                ],
-            },
+            fill=None,
             hovertemplate=(
                 "%{customdata[0]}<br>"
                 "Valor inicial: %{customdata[1]}<br>"
@@ -153,17 +141,10 @@ def build_investment_evolution_chart(evolucion):
         )
     )
     fig.update_layout(
-        plot_bgcolor="#FFFFFF",
-        paper_bgcolor="rgba(255,255,255,0)",
         legend_title_text="",
         separators=",.",
         hovermode="closest",
-        hoverlabel={
-            "align": "left",
-            "bgcolor": "#FFFFFF",
-            "bordercolor": COLOR_GRID_SUBTLE,
-            "font": {"color": "#1E293B", "size": 13},
-        },
+        hoverlabel={"align": "left"},
         legend={
             "orientation": "h",
             "yanchor": "bottom",
@@ -179,14 +160,13 @@ def build_investment_evolution_chart(evolucion):
         linecolor=COLOR_GRID_SUBTLE,
     )
     fig.update_yaxes(
-        showgrid=True,
-        gridcolor=COLOR_GRID_SUBTLE,
+        showgrid=False,
         zeroline=False,
         ticksuffix="\u20ac",
         tickfont={"color": COLOR_TEXT_MUTED},
         linecolor=COLOR_GRID_SUBTLE,
     )
-    return fig
+    return aplicar_tema_grafica(fig, is_dark)
 
 
 def preparar_evolucion_activo_chart(evolucion, df_asset_ops, clave_activo):
@@ -213,19 +193,12 @@ def preparar_evolucion_activo_chart(evolucion, df_asset_ops, clave_activo):
     return chart_data
 
 
-def aplicar_estilo_chart_activo(fig, ticksuffix="\u20ac"):
+def aplicar_estilo_chart_activo(fig, ticksuffix="\u20ac", is_dark=False):
     fig.update_layout(
-        plot_bgcolor="rgba(0,0,0,0)",
-        paper_bgcolor="rgba(0,0,0,0)",
         separators=",.",
         showlegend=False,
         hovermode="closest",
-        hoverlabel={
-            "align": "left",
-            "bgcolor": "#FFFFFF",
-            "bordercolor": COLOR_GRID_SUBTLE,
-            "font": {"color": "#1E293B", "size": 13},
-        },
+        hoverlabel={"align": "left"},
     )
     fig.update_xaxes(
         showgrid=False,
@@ -234,17 +207,16 @@ def aplicar_estilo_chart_activo(fig, ticksuffix="\u20ac"):
         linecolor=COLOR_GRID_SUBTLE,
     )
     fig.update_yaxes(
-        showgrid=True,
-        gridcolor=COLOR_GRID_SUBTLE,
+        showgrid=False,
         zeroline=False,
         ticksuffix=ticksuffix,
         tickfont={"color": COLOR_TEXT_MUTED},
         linecolor=COLOR_GRID_SUBTLE,
     )
-    return fig
+    return aplicar_tema_grafica(fig, is_dark)
 
 
-def build_asset_unit_price_chart(chart_data):
+def build_asset_unit_price_chart(chart_data, is_dark=False):
     hover_data = chart_data[["Fecha hover", "Precio unitario hover"]]
     fig = go.Figure()
     fig.add_trace(
@@ -263,7 +235,7 @@ def build_asset_unit_price_chart(chart_data):
             ),
         )
     )
-    return aplicar_estilo_chart_activo(fig)
+    return aplicar_estilo_chart_activo(fig, is_dark=is_dark)
 
 
 def calcular_evolucion_activo_registrada(df_asset):
@@ -546,7 +518,7 @@ def distribucion_historica_por_tipo(activos_historicos):
     return resumen.sort_values("Dinero inicial invertido", ascending=False)
 
 
-def build_historical_asset_type_chart(distribucion):
+def build_historical_asset_type_chart(distribucion, is_dark=False):
     dinero_inicial_hover = distribucion["Dinero inicial invertido"].apply(formato_euros_hover)
     valor_final_hover = distribucion["Valor final/actual"].apply(formato_euros_hover)
     fig = go.Figure()
@@ -572,16 +544,9 @@ def build_historical_asset_type_chart(distribucion):
     )
     fig.update_layout(
         barmode="group",
-        plot_bgcolor="rgba(0,0,0,0)",
-        paper_bgcolor="rgba(255,255,255,0)",
         legend_title_text="",
         separators=",.",
-        hoverlabel={
-            "align": "left",
-            "bgcolor": "#FFFFFF",
-            "bordercolor": COLOR_GRID_SUBTLE,
-            "font": {"color": "#1E293B", "size": 13},
-        },
+        hoverlabel={"align": "left"},
         legend={
             "orientation": "h",
             "yanchor": "bottom",
@@ -597,26 +562,25 @@ def build_historical_asset_type_chart(distribucion):
         linecolor=COLOR_GRID_SUBTLE,
     )
     fig.update_yaxes(
-        showgrid=True,
-        gridcolor="#F8FAFC",
+        showgrid=False,
         zeroline=False,
         ticksuffix="\u20ac",
         tickfont={"color": COLOR_TEXT_MUTED},
         linecolor=COLOR_GRID_SUBTLE,
     )
-    return fig
+    return aplicar_tema_grafica(fig, is_dark)
 
 
-def render_assets_summary_table(activos, df_inv, refresh, usuario, empty_message):
+def render_assets_summary_table(activos, df_inv, refresh, usuario, empty_message, is_dark=False):
     if activos.empty:
         ui.label(empty_message).classes("text-gray-500")
         return
 
     with ui.element("div").classes("current-assets-scroll"):
         with ui.element("div").classes("current-assets-table"):
-            with ui.element("div").classes("current-assets-header-row bg-white sticky top-0 z-20"):
+            with ui.element("div").classes("current-assets-header-row bg-white dark:bg-slate-800 sticky top-0 z-20"):
                 for label in ["Activo", "Balance", "Últ. registro", "Tipo", ""]:
-                    header_classes = "current-assets-table-header bg-white"
+                    header_classes = "current-assets-table-header bg-white dark:bg-slate-800"
                     if label in {"Balance", "Últ. registro"}:
                         header_classes += " current-assets-number"
                     ui.label(label).classes(header_classes)
@@ -639,7 +603,7 @@ def render_assets_summary_table(activos, df_inv, refresh, usuario, empty_message
                         chart_button = ui.button(
                             icon="show_chart",
                             on_click=lambda inversion=row["inversion"]: open_asset_detail_dialog(
-                                inversion, df_inv, refresh, usuario
+                                inversion, df_inv, refresh, usuario, is_dark=is_dark
                             ),
                         ).props("flat round dense")
                         with chart_button:
@@ -656,7 +620,7 @@ def open_asset_edit_dialog(df_inv, refresh, usuario):
         .sort_values("inversion")
     )
 
-    with ui.dialog() as dialog, ui.card().classes("dialog-card asset-edit-dialog bg-slate-50"):
+    with ui.dialog() as dialog, ui.card().classes("dialog-card asset-edit-dialog bg-slate-50 dark:bg-slate-900"):
         ui.label("Editar activos").classes("text-2xl font-semibold")
         ui.label(
             "Los cambios de aplicación y tipo se aplicarán a todos los registros históricos del activo."
@@ -779,7 +743,7 @@ def open_asset_edit_dialog(df_inv, refresh, usuario):
                     )
                     with inner:
                         with ui.card().classes(
-                            "absolute inset-0 [backface-visibility:hidden] bg-white border border-slate-200 "
+                            "absolute inset-0 [backface-visibility:hidden] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 "
                             "rounded-2xl shadow-sm hover:-translate-y-1 hover:shadow-md cursor-pointer "
                             "transition-all flex flex-col items-center justify-center text-center p-5"
                         ) as front_card:
@@ -787,17 +751,17 @@ def open_asset_edit_dialog(df_inv, refresh, usuario):
                                 imagen_avatar = ui.image(logo_actual).props(
                                     f'error-src="{fallback_logo}"'
                                 ).classes(
-                                    "w-16 h-16 rounded-full shadow-sm object-contain bg-white"
+                                    "w-16 h-16 rounded-full shadow-sm object-contain bg-white dark:bg-slate-700"
                                 )
                                 ui.label(inversion).classes(
-                                    "text-lg font-bold text-slate-900 leading-tight line-clamp-2"
+                                    "text-lg font-bold text-slate-900 dark:text-slate-100 leading-tight line-clamp-2"
                                 )
                                 metadata_label = ui.label(f"{ticker_actual} · {divisa_actual}").classes(
-                                    "text-xs font-medium text-slate-500 mb-2"
+                                    "text-xs font-medium text-slate-500 dark:text-slate-400 mb-2"
                                 )
                                 metadata_label.set_visibility(bool(ticker_actual))
                                 manual_badge = ui.label("✍️ Valoración manual").classes(
-                                    "bg-slate-100 text-slate-500 text-[11px] font-medium px-2.5 py-1 rounded-full mb-2"
+                                    "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-[11px] font-medium px-2.5 py-1 rounded-full mb-2"
                                 )
                                 manual_badge.set_visibility(not bool(ticker_actual))
                                 with ui.row().classes("w-full justify-center gap-2"):
@@ -810,7 +774,7 @@ def open_asset_edit_dialog(df_inv, refresh, usuario):
 
                         with ui.card().classes(
                             "absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)] "
-                            "bg-slate-50 border border-blue-200 rounded-2xl shadow-md flex flex-col p-3 "
+                            "bg-slate-50 dark:bg-slate-900 border border-blue-200 dark:border-slate-700 rounded-2xl shadow-md flex flex-col p-3 "
                             "justify-between"
                         ):
                             with ui.column().classes("w-full gap-1.5"):
@@ -818,18 +782,18 @@ def open_asset_edit_dialog(df_inv, refresh, usuario):
                                     opciones_con_valor(aplicaciones, aplicacion_actual),
                                     label="Aplicación",
                                     value=aplicacion_actual,
-                                ).props("outlined dense").classes("w-full rounded-lg")
+                                ).props(quasar_dark_props("outlined dense")).classes("w-full rounded-lg")
                                 tipo_select = ui.select(
                                     opciones_con_valor(tipos_activo, tipo_actual),
                                     label="Tipo de activo",
                                     value=tipo_actual,
-                                ).props("outlined dense").classes("w-full rounded-lg")
+                                ).props(quasar_dark_props("outlined dense")).classes("w-full rounded-lg")
                                 with ui.row().classes("w-full gap-2"):
                                     ticker_input = ui.input(
                                         label="Ticker / ISIN",
                                         value=ticker_actual,
                                         placeholder="SAN.MC",
-                                    ).props("outlined dense").classes("flex-1 min-w-0 rounded-lg")
+                                    ).props(quasar_dark_props("outlined dense stack-label")).classes("flex-1 min-w-0 rounded-lg")
                                     with ticker_input.add_slot("append"):
                                         ticker_search_spinner = ui.spinner(size="sm").classes("text-blue-600")
                                         ticker_search_button = ui.button(icon="search", color="primary").props(
@@ -841,7 +805,9 @@ def open_asset_edit_dialog(df_inv, refresh, usuario):
                                         label="Divisa",
                                         value=divisa_actual,
                                         placeholder="-",
-                                    ).props("outlined dense readonly").classes("w-24 rounded-lg bg-white")
+                                    ).props(quasar_dark_props("outlined dense readonly stack-label")).classes(
+                                        "w-24 rounded-lg bg-white dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700"
+                                    )
 
                             fila = {
                                 "inversion": inversion,
@@ -867,10 +833,10 @@ def open_asset_edit_dialog(df_inv, refresh, usuario):
                                 "manual_badge": manual_badge,
                             }
                             with ui.row().classes("w-full justify-end gap-2 mt-1"):
-                                logo_sync_spinner = ui.spinner(size="sm").classes("text-[#64748B]")
+                                logo_sync_spinner = ui.spinner(size="sm").classes("text-slate-500 dark:text-slate-400")
                                 logo_sync_spinner.set_visibility(False)
                                 logo_sync_button = ui.button(icon="sync").props("flat round dense").classes(
-                                    "text-[#64748B]"
+                                    "text-slate-500 dark:text-slate-400"
                                 )
                                 fila["logo_sync_spinner"] = logo_sync_spinner
                                 fila["logo_sync_button"] = logo_sync_button
@@ -878,7 +844,7 @@ def open_asset_edit_dialog(df_inv, refresh, usuario):
                                     "Cancelar",
                                     icon="close",
                                     on_click=lambda e=None, fila=fila: reset_asset_card(fila),
-                                ).props("flat no-caps dense").classes("text-slate-500")
+                                ).props("flat no-caps dense").classes("text-slate-500 dark:text-slate-400")
                                 ui.button(
                                     "Guardar",
                                     icon="check",
@@ -925,240 +891,430 @@ def open_asset_edit_dialog(df_inv, refresh, usuario):
                 logo_sync_button.on_click(lambda e=None, fila=fila: sync_logo_asset(fila))
                 front_card.on("click", lambda _, fila=fila: set_card_flipped(fila["estado"], fila["inner"], True))
 
-        with ui.row().classes("w-full justify-end pt-4 mt-2 border-t border-slate-200"):
-            ui.button("Cerrar", on_click=dialog.close).props("flat no-caps").classes("text-slate-500")
+        with ui.row().classes("w-full justify-end pt-4 mt-2 border-t border-slate-200 dark:border-slate-700"):
+            ui.button("Cerrar", on_click=dialog.close).props("flat no-caps").classes("text-slate-500 dark:text-slate-400")
     dialog.open()
 
 
-def render_catalog_preferences(usuario):
-    with ui.tabs().props('dense no-caps align="left"').classes(
-        "w-full px-6 bg-white border-b border-slate-100"
-    ) as tabs:
-        brokers_tab = ui.tab("brokers", label="Brokers")
-        tipos_tab = ui.tab("tipos", label="Tipos de activo")
+def render_catalog_preferences(usuario, vista_actual="brokers"):
+    cotizaciones = cargar_cotizaciones_activos(usuario)
 
-    with ui.tab_panels(tabs, value=brokers_tab).classes(
-        "w-full flex-1 overflow-y-auto overflow-x-hidden bg-slate-50"
-    ):
-        with ui.tab_panel(brokers_tab).classes("p-0"):
-            cotizaciones = cargar_cotizaciones_activos(usuario)
+    def activos_por_catalogo(columna):
+        df_activos = cargar_datos("activos", usuario)
+        if df_activos.empty:
+            return {}
+        agrupados = {}
+        for _, row in df_activos.sort_values("inversion").iterrows():
+            nombre_catalogo = str(row[columna] or "").strip()
+            inversion = str(row["inversion"] or "").strip()
+            if nombre_catalogo and inversion:
+                logo_url = (cotizaciones.get(inversion, {}).get("logo_url") or "").strip()
+                agrupados.setdefault(nombre_catalogo, []).append({
+                    "nombre": inversion,
+                    "logo_url": logo_url,
+                })
+        return agrupados
 
-            def activos_por_catalogo(columna):
-                df_activos = cargar_datos("activos", usuario)
-                if df_activos.empty:
-                    return {}
-                agrupados = {}
-                for _, row in df_activos.sort_values("inversion").iterrows():
-                    nombre_catalogo = str(row[columna] or "").strip()
-                    inversion = str(row["inversion"] or "").strip()
-                    if nombre_catalogo and inversion:
-                        logo_url = (cotizaciones.get(inversion, {}).get("logo_url") or "").strip()
-                        agrupados.setdefault(nombre_catalogo, []).append({
-                            "nombre": inversion,
-                            "logo_url": logo_url,
-                        })
-                return agrupados
+    def render_mini_logos(activos, cantidad):
+        activos = list(activos or [])
+        with ui.element("div").classes("mt-1 w-full"):
+            with ui.row().classes("flex items-center justify-center"):
+                activos_visibles = activos[:3]
+                for activo in activos_visibles:
+                    nombre_activo = activo.get("nombre", "") if isinstance(activo, dict) else str(activo)
+                    fallback_logo = url_avatar_fallback(nombre_activo)
+                    logo_url = (
+                        activo.get("logo_url", "") if isinstance(activo, dict) else ""
+                    ) or fallback_logo
+                    ui.image(logo_url).props(f'error-src="{fallback_logo}"').classes(
+                        "w-6 h-6 rounded-full border-2 border-white dark:border-slate-800 -ml-2 first:ml-0"
+                    )
+                restantes = cantidad - len(activos_visibles) if cantidad > 3 else 0
+                if restantes:
+                    with ui.element("div").classes(
+                        "w-6 h-6 rounded-full border-2 border-white dark:border-slate-800 bg-slate-100 text-slate-600 "
+                        "flex items-center justify-center text-[9px] font-bold -ml-2"
+                    ):
+                        ui.label(f"+{restantes}").classes("text-[9px] font-bold leading-none")
 
-            def render_mini_logos(activos, cantidad):
-                activos = list(activos or [])
-                with ui.element("div").classes("mt-1 w-full"):
-                    with ui.row().classes("flex items-center justify-center"):
-                        activos_visibles = activos[:3]
-                        for activo in activos_visibles:
-                            nombre_activo = activo.get("nombre", "") if isinstance(activo, dict) else str(activo)
-                            fallback_logo = url_avatar_fallback(nombre_activo)
-                            logo_url = (
-                                activo.get("logo_url", "") if isinstance(activo, dict) else ""
-                            ) or fallback_logo
-                            ui.image(logo_url).props(f'error-src="{fallback_logo}"').classes(
-                                "w-6 h-6 rounded-full border-2 border-white -ml-2 first:ml-0"
-                            )
-                        restantes = cantidad - len(activos_visibles) if cantidad > 3 else 0
-                        if restantes:
-                            with ui.element("div").classes(
-                                "w-6 h-6 rounded-full border-2 border-white bg-slate-100 text-slate-600 "
-                                "flex items-center justify-center text-[9px] font-bold -ml-2"
-                            ):
-                                ui.label(f"+{restantes}").classes("text-[9px] font-bold leading-none")
+    def render_usage_count(cantidad):
+        texto = "1 registro" if cantidad == 1 else f"{cantidad} registros"
+        ui.label(texto).classes("mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400 w-full")
 
-            def render_catalog_card(tabla, nombre, cantidad, activos, render_catalog):
+    def render_catalog_card(tabla, nombre, cantidad, activos, render_catalog, mostrar_contador=False):
+        with ui.card().classes(
+            "bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-slate-200 dark:border-slate-700 hover:-translate-y-1 "
+            "hover:shadow-md transition-all flex flex-col items-center text-center relative "
+            "aspect-square justify-between min-h-[160px]"
+        ):
+            if cantidad == 0:
+                ui.button(
+                    icon="delete",
+                    on_click=lambda nombre=nombre: delete_catalog_item(
+                        tabla, nombre, render_catalog, usuario
+                    ),
+                ).props("flat dense round size=sm").classes(
+                    "catalog-delete-button absolute top-2.5 right-2.5"
+                )
+            with ui.column().classes("w-full items-center gap-1 pt-3 min-w-0"):
+                ui.image(url_catalog_avatar(nombre)).classes(
+                    "w-10 h-10 rounded-full mb-1 shadow-sm object-contain"
+                )
+                ui.label(nombre).classes(
+                    "text-sm font-bold text-slate-900 dark:text-slate-100 line-clamp-1 w-full"
+                )
+                if mostrar_contador:
+                    render_usage_count(cantidad)
+                else:
+                    render_mini_logos(activos, cantidad)
+
+    def render_text_catalog_grid(tabla, columna_uso, titulo_add, input_label, render_catalog):
+        usos = usos_catalogo(columna_uso, usuario)
+        creando, set_creando = ui.state(False)
+        with ui.grid().classes("catalog-preferences-grid grid-cols-2 gap-4 w-full p-6"):
+            for nombre in ordenar_catalogo_por_uso(cargar_catalogo(tabla), usos):
+                cantidad = usos.get(nombre, 0)
+                render_catalog_card(
+                    tabla,
+                    nombre,
+                    cantidad,
+                    [],
+                    render_catalog,
+                    mostrar_contador=True,
+                )
+
+            if not creando:
+                with ui.element("div").classes(
+                    "catalog-create-card border-2 border-dashed border-slate-300 rounded-2xl "
+                    "flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 "
+                    "aspect-square min-h-[160px] transition-colors"
+                ) as ghost_card:
+                    ghost_card.on("click", lambda _: set_creando(True))
+                    ui.icon("add").classes("catalog-create-icon text-5xl")
+            else:
                 with ui.card().classes(
-                    "bg-white rounded-2xl p-4 shadow-sm border border-slate-200 hover:-translate-y-1 "
-                    "hover:shadow-md transition-all flex flex-col items-center text-center relative "
-                    "aspect-square justify-between min-h-[160px]"
+                    "bg-white dark:bg-slate-800 border-2 border-blue-500 shadow-lg rounded-2xl flex flex-col "
+                    "justify-between p-4 aspect-square min-h-[160px] transition-all min-w-0"
                 ):
-                    if cantidad == 0:
+                    ui.label(titulo_add).classes(
+                        "text-sm font-bold text-slate-800 text-center w-full mb-2"
+                    )
+                    nuevo_valor = ui.input(input_label).props(quasar_dark_props("outlined dense")).classes("w-full")
+
+                    def add_valor():
+                        nombre = (nuevo_valor.value or "").strip()
+                        if not nombre:
+                            ui.notify("Indica un nombre.", color="warning")
+                            return
+                        try:
+                            insertar_catalogo(tabla, nombre)
+                        except sqlite3.IntegrityError:
+                            ui.notify("Ese valor ya existe.", color="warning")
+                            return
+                        set_creando(False)
+
+                    with ui.row().classes("w-full grid grid-cols-2 gap-2 mt-auto pt-2 min-w-0"):
                         ui.button(
-                            icon="delete",
-                            on_click=lambda nombre=nombre: delete_catalog_item(
-                                tabla, nombre, render_catalog, usuario
-                            ),
-                        ).props("flat dense round size=sm").classes(
-                            "catalog-delete-button absolute top-2.5 right-2.5"
+                            "Cancelar",
+                            on_click=lambda: set_creando(False),
+                        ).props("unelevated no-caps").classes(
+                            "bg-slate-100 text-slate-600 rounded-xl font-medium"
                         )
-                    with ui.column().classes("w-full items-center gap-1 pt-3 min-w-0"):
-                        ui.image(url_catalog_avatar(nombre)).classes(
-                            "w-10 h-10 rounded-full mb-1 shadow-sm object-contain"
+                        ui.button(
+                            "Guardar",
+                            on_click=add_valor,
+                        ).props("unelevated no-caps").classes(
+                            "bg-blue-600 text-white rounded-xl font-medium"
                         )
-                        ui.label(nombre).classes(
-                            "text-sm font-bold text-slate-900 line-clamp-1 w-full"
-                        )
-                        render_mini_logos(activos, cantidad)
 
-            @ui.refreshable
-            def render_brokers():
-                usos = usos_catalogo("aplicacion", usuario)
-                activos_por_broker = activos_por_catalogo("aplicacion")
-                creando, set_creando = ui.state(False)
-                with ui.grid().classes("catalog-preferences-grid grid-cols-2 gap-4 w-full p-6"):
-                    for nombre in ordenar_catalogo_por_uso(cargar_catalogo("brokers"), usos):
-                        activos = activos_por_broker.get(nombre, [])
-                        cantidad = max(usos.get(nombre, 0), len(activos))
-                        render_catalog_card("brokers", nombre, cantidad, activos, render_brokers)
+    @ui.refreshable
+    def render_brokers():
+        usos = usos_catalogo("aplicacion", usuario)
+        activos_por_broker = activos_por_catalogo("aplicacion")
+        creando, set_creando = ui.state(False)
+        with ui.grid().classes("catalog-preferences-grid grid-cols-2 gap-4 w-full p-6"):
+            for nombre in ordenar_catalogo_por_uso(cargar_catalogo("brokers"), usos):
+                activos = activos_por_broker.get(nombre, [])
+                cantidad = max(usos.get(nombre, 0), len(activos))
+                render_catalog_card("brokers", nombre, cantidad, activos, render_brokers)
 
-                    brokers = set(cargar_catalogo("brokers"))
-                    cuentas = [cuenta for cuenta in cargar_catalogo("cuentas") if cuenta not in brokers]
-                    if not creando:
-                        with ui.element("div").classes(
-                            "catalog-create-card border-2 border-dashed border-slate-300 rounded-2xl "
-                            "flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 "
-                            "aspect-square min-h-[160px] transition-colors"
-                        ) as ghost_card:
-                            ghost_card.on("click", lambda _: set_creando(True))
-                            ui.icon("add").classes(
-                                "catalog-create-icon text-5xl"
-                            )
+            brokers = set(cargar_catalogo("brokers"))
+            cuentas = [cuenta for cuenta in cargar_catalogo("cuentas") if cuenta not in brokers]
+            if not creando:
+                with ui.element("div").classes(
+                    "catalog-create-card border-2 border-dashed border-slate-300 rounded-2xl "
+                    "flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 "
+                    "aspect-square min-h-[160px] transition-colors"
+                ) as ghost_card:
+                    ghost_card.on("click", lambda _: set_creando(True))
+                    ui.icon("add").classes("catalog-create-icon text-5xl")
+            else:
+                with ui.card().classes(
+                    "bg-white dark:bg-slate-800 border-2 border-blue-500 shadow-lg rounded-2xl flex flex-col "
+                    "justify-between p-4 aspect-square min-h-[160px] transition-all min-w-0"
+                ):
+                    ui.label("Añadir Broker").classes(
+                        "text-sm font-bold text-slate-800 text-center w-full mb-2"
+                    )
+                    if not cuentas:
+                        ui.label("No hay cuentas disponibles.").classes(
+                            "text-xs font-medium text-slate-500 dark:text-slate-400 text-center"
+                        )
+                        ui.button(
+                            "Cancelar",
+                            on_click=lambda: set_creando(False),
+                        ).props("unelevated no-caps").classes(
+                            "w-full mt-auto bg-slate-100 text-slate-600 rounded-xl font-medium"
+                        )
                     else:
-                        with ui.card().classes(
-                            "bg-white border-2 border-blue-500 shadow-lg rounded-2xl flex flex-col "
-                            "justify-between p-4 aspect-square min-h-[160px] transition-all min-w-0"
-                        ):
-                            ui.label("Añadir Broker").classes(
-                                "text-sm font-bold text-slate-800 text-center w-full mb-2"
+                        cuenta_select = ui.select(
+                            cuentas,
+                            label="Cuenta",
+                            value=cuentas[0],
+                        ).props(quasar_dark_props("outlined dense")).classes("w-full")
+
+                        def add_broker():
+                            nombre = (cuenta_select.value or "").strip()
+                            if not nombre:
+                                ui.notify("Selecciona una cuenta.", color="warning")
+                                return
+                            try:
+                                insertar_catalogo("brokers", nombre)
+                            except sqlite3.IntegrityError:
+                                ui.notify("Ese broker ya existe.", color="warning")
+                                return
+                            set_creando(False)
+
+                        with ui.row().classes("w-full grid grid-cols-2 gap-2 mt-auto pt-2 min-w-0"):
+                            ui.button(
+                                "Cancelar",
+                                on_click=lambda: set_creando(False),
+                            ).props("unelevated no-caps").classes(
+                                "bg-slate-100 text-slate-600 rounded-xl font-medium"
                             )
-                            if not cuentas:
-                                ui.label("No hay cuentas disponibles.").classes(
-                                    "text-xs font-medium text-slate-500 text-center"
-                                )
-                                ui.button(
-                                    "Cancelar",
-                                    on_click=lambda: set_creando(False),
-                                ).props("unelevated no-caps").classes(
-                                    "w-full mt-auto bg-slate-100 text-slate-600 rounded-xl font-medium"
-                                )
-                            else:
-                                cuenta_select = ui.select(
-                                    cuentas,
-                                    label="Cuenta",
-                                    value=cuentas[0],
-                                ).props("outlined dense").classes("w-full")
-
-                                def add_broker():
-                                    nombre = (cuenta_select.value or "").strip()
-                                    if not nombre:
-                                        ui.notify("Selecciona una cuenta.", color="warning")
-                                        return
-                                    try:
-                                        insertar_catalogo("brokers", nombre)
-                                    except sqlite3.IntegrityError:
-                                        ui.notify("Ese broker ya existe.", color="warning")
-                                        return
-                                    set_creando(False)
-
-                                with ui.row().classes("w-full grid grid-cols-2 gap-2 mt-auto pt-2 min-w-0"):
-                                    ui.button(
-                                        "Cancelar",
-                                        on_click=lambda: set_creando(False),
-                                    ).props("unelevated no-caps").classes(
-                                        "bg-slate-100 text-slate-600 rounded-xl font-medium"
-                                    )
-                                    ui.button(
-                                        "Guardar",
-                                        on_click=add_broker,
-                                    ).props("unelevated no-caps").classes(
-                                        "bg-blue-600 text-white rounded-xl font-medium"
-                                    )
-
-            render_brokers()
-
-        with ui.tab_panel(tipos_tab).classes("p-0"):
-            @ui.refreshable
-            def render_tipos():
-                usos = usos_catalogo("tipo_activo", usuario)
-                activos_por_tipo = activos_por_catalogo("tipo_activo")
-                creando, set_creando = ui.state(False)
-                with ui.grid().classes("catalog-preferences-grid grid-cols-2 gap-4 w-full p-6"):
-                    for nombre in ordenar_catalogo_por_uso(cargar_catalogo("tipos_activo"), usos):
-                        activos = activos_por_tipo.get(nombre, [])
-                        cantidad = max(usos.get(nombre, 0), len(activos))
-                        render_catalog_card("tipos_activo", nombre, cantidad, activos, render_tipos)
-
-                    if not creando:
-                        with ui.element("div").classes(
-                            "catalog-create-card border-2 border-dashed border-slate-300 rounded-2xl "
-                            "flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 "
-                            "aspect-square min-h-[160px] transition-colors"
-                        ) as ghost_card:
-                            ghost_card.on("click", lambda _: set_creando(True))
-                            ui.icon("add").classes(
-                                "catalog-create-icon text-5xl"
+                            ui.button(
+                                "Guardar",
+                                on_click=add_broker,
+                            ).props("unelevated no-caps").classes(
+                                "bg-blue-600 text-white rounded-xl font-medium"
                             )
-                    else:
-                        with ui.card().classes(
-                            "bg-white border-2 border-blue-500 shadow-lg rounded-2xl flex flex-col "
-                            "justify-between p-4 aspect-square min-h-[160px] transition-all min-w-0"
-                        ):
-                            ui.label("Añadir Tipo").classes(
-                                "text-sm font-bold text-slate-800 text-center w-full mb-2"
-                            )
-                            nuevo_tipo = ui.input("Nuevo tipo de activo").props(
-                                "outlined dense"
-                            ).classes("w-full")
 
-                            def add_tipo():
-                                nombre = (nuevo_tipo.value or "").strip()
-                                if not nombre:
-                                    ui.notify("Indica un nombre.", color="warning")
-                                    return
-                                try:
-                                    insertar_catalogo("tipos_activo", nombre)
-                                except sqlite3.IntegrityError:
-                                    ui.notify("Ese valor ya existe.", color="warning")
-                                    return
-                                set_creando(False)
+    @ui.refreshable
+    def render_tipos():
+        usos = usos_catalogo("tipo_activo", usuario)
+        activos_por_tipo = activos_por_catalogo("tipo_activo")
+        creando, set_creando = ui.state(False)
+        with ui.grid().classes("catalog-preferences-grid grid-cols-2 gap-4 w-full p-6"):
+            for nombre in ordenar_catalogo_por_uso(cargar_catalogo("tipos_activo"), usos):
+                activos = activos_por_tipo.get(nombre, [])
+                cantidad = max(usos.get(nombre, 0), len(activos))
+                render_catalog_card("tipos_activo", nombre, cantidad, activos, render_tipos)
 
-                            with ui.row().classes("w-full grid grid-cols-2 gap-2 mt-auto pt-2 min-w-0"):
-                                ui.button(
-                                    "Cancelar",
-                                    on_click=lambda: set_creando(False),
-                                ).props("unelevated no-caps").classes(
-                                    "bg-slate-100 text-slate-600 rounded-xl font-medium"
-                                )
-                                ui.button(
-                                    "Guardar",
-                                    on_click=add_tipo,
-                                ).props("unelevated no-caps").classes(
-                                    "bg-blue-600 text-white rounded-xl font-medium"
-                                )
+            if not creando:
+                with ui.element("div").classes(
+                    "catalog-create-card border-2 border-dashed border-slate-300 rounded-2xl "
+                    "flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 "
+                    "aspect-square min-h-[160px] transition-colors"
+                ) as ghost_card:
+                    ghost_card.on("click", lambda _: set_creando(True))
+                    ui.icon("add").classes("catalog-create-icon text-5xl")
+            else:
+                with ui.card().classes(
+                    "bg-white dark:bg-slate-800 border-2 border-blue-500 shadow-lg rounded-2xl flex flex-col "
+                    "justify-between p-4 aspect-square min-h-[160px] transition-all min-w-0"
+                ):
+                    ui.label("Añadir Tipo").classes(
+                        "text-sm font-bold text-slate-800 text-center w-full mb-2"
+                    )
+                    nuevo_tipo = ui.input("Nuevo tipo de activo").props(
+                        quasar_dark_props("outlined dense")
+                    ).classes("w-full")
 
-            render_tipos()
+                    def add_tipo():
+                        nombre = (nuevo_tipo.value or "").strip()
+                        if not nombre:
+                            ui.notify("Indica un nombre.", color="warning")
+                            return
+                        try:
+                            insertar_catalogo("tipos_activo", nombre)
+                        except sqlite3.IntegrityError:
+                            ui.notify("Ese valor ya existe.", color="warning")
+                            return
+                        set_creando(False)
+
+                    with ui.row().classes("w-full grid grid-cols-2 gap-2 mt-auto pt-2 min-w-0"):
+                        ui.button(
+                            "Cancelar",
+                            on_click=lambda: set_creando(False),
+                        ).props("unelevated no-caps").classes(
+                            "bg-slate-100 text-slate-600 rounded-xl font-medium"
+                        )
+                        ui.button(
+                            "Guardar",
+                            on_click=add_tipo,
+                        ).props("unelevated no-caps").classes(
+                            "bg-blue-600 text-white rounded-xl font-medium"
+                        )
+
+    @ui.refreshable
+    def render_cuentas():
+        render_text_catalog_grid(
+            "cuentas",
+            "cuenta",
+            "Añadir Cuenta",
+            "Nueva cuenta",
+            render_cuentas,
+        )
+
+    @ui.refreshable
+    def render_sectores():
+        render_text_catalog_grid(
+            "sectores",
+            "sector",
+            "Añadir Sector",
+            "Nuevo sector",
+            render_sectores,
+        )
+
+    if vista_actual == "brokers":
+        render_brokers()
+    elif vista_actual == "tipos":
+        render_tipos()
+    elif vista_actual == "cuentas":
+        render_cuentas()
+    elif vista_actual == "sectores":
+        render_sectores()
 
 
-def open_preferences_drawer(usuario):
+def open_preferences_drawer(usuario, is_dark=None, on_toggle_theme=None):
+    vista_actual = {"value": "menu"}
+    titulos = {
+        "perfil": "Perfil",
+        "apariencia": "Apariencia",
+        "notificaciones": "Notificaciones",
+        "cuentas": "Cuentas",
+        "sectores": "Sectores",
+        "brokers": "Brokers",
+        "tipos": "Tipos de activo",
+    }
+
     with ui.dialog().props(
         'position="right" maximized transition-show="slide-left" transition-hide="slide-right"'
     ) as dialog, ui.card().classes(
-        "preferences-drawer-card h-full bg-slate-50 p-0 flex flex-col no-shadow"
+        "preferences-drawer-card h-full bg-slate-50 dark:bg-slate-900 p-0 flex flex-col no-shadow"
     ):
-        with ui.row().classes(
-            "w-full items-center justify-between p-6 bg-white border-b border-slate-100"
-        ):
-            ui.label("Preferencias").classes("text-2xl font-semibold text-slate-900")
-            ui.button(icon="close", on_click=dialog.close).props("flat round dense").classes(
-                "text-slate-500"
-            )
+        def set_vista(vista):
+            vista_actual["value"] = vista
+            render_content.refresh()
 
-        render_catalog_preferences(usuario)
+        def render_menu_row(titulo, icono, icon_classes, vista_destino):
+            with ui.row().classes(
+                "w-full items-center justify-between p-4 border-b border-slate-100 dark:border-slate-700 last:border-0 "
+                "hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+            ) as row:
+                row.on("click", lambda _: set_vista(vista_destino))
+                with ui.row().classes("items-center gap-3 min-w-0"):
+                    with ui.element("div").classes(f"p-2 rounded-full {icon_classes}"):
+                        ui.icon(icono).classes("text-lg")
+                    ui.label(titulo).classes("text-sm font-semibold text-slate-800 dark:text-slate-200")
+                ui.icon("chevron_right").classes("text-slate-500")
+
+        def render_settings_menu():
+            with ui.column().classes("w-full p-6 gap-0"):
+                with ui.card().classes(
+                    "bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden mb-6 p-0 gap-0"
+                ):
+                    render_menu_row("Perfil", "person", "bg-slate-100 text-slate-600", "perfil")
+                    render_menu_row("Apariencia", "palette", "bg-purple-50 text-purple-600", "apariencia")
+                    render_menu_row(
+                        "Notificaciones",
+                        "notifications",
+                        "bg-rose-50 text-rose-600",
+                        "notificaciones",
+                    )
+                with ui.card().classes(
+                    "bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden mb-6 p-0 gap-0"
+                ):
+                    render_menu_row(
+                        "Cuentas",
+                        "account_balance_wallet",
+                        "bg-teal-50 text-teal-600",
+                        "cuentas",
+                    )
+                    render_menu_row("Sectores", "pie_chart", "bg-yellow-50 text-yellow-600", "sectores")
+                    render_menu_row("Brokers", "account_balance", "bg-blue-50 text-blue-600", "brokers")
+                    render_menu_row("Tipos de activo", "label", "bg-emerald-50 text-emerald-600", "tipos")
+
+        def render_appearance_settings():
+            dark_enabled = bool(is_dark()) if callable(is_dark) else False
+
+            def apply_theme_change(event):
+                if callable(on_toggle_theme):
+                    on_toggle_theme(bool(event.value))
+                render_content.refresh()
+
+            with ui.column().classes("w-full p-6 gap-4"):
+                with ui.card().classes(
+                    "w-full bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 "
+                    "dark:border-slate-700 shadow-sm p-4 gap-0"
+                ):
+                    with ui.row().classes("w-full items-center justify-between gap-4"):
+                        with ui.row().classes("items-center gap-3 min-w-0"):
+                            with ui.element("div").classes(
+                                "w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 "
+                                "text-slate-500 dark:text-slate-300 flex items-center justify-center shrink-0"
+                            ):
+                                ui.icon("dark_mode" if dark_enabled else "light_mode").classes("text-xl")
+                            with ui.column().classes("gap-0 min-w-0"):
+                                ui.label("Modo oscuro").classes(
+                                    "text-sm font-semibold text-slate-900 dark:text-slate-100"
+                                )
+                                ui.label("Optimiza fondos, textos y gráficas para baja luz.").classes(
+                                    "text-xs text-slate-500 dark:text-slate-400"
+                                )
+                        ui.switch(value=dark_enabled, on_change=apply_theme_change).props("color=primary")
+
+        @ui.refreshable
+        def render_content():
+            vista = vista_actual["value"]
+            if vista == "menu":
+                with ui.row().classes(
+                    "sticky top-0 z-10 w-full items-center justify-between p-6 bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700"
+                ):
+                    ui.label("Preferencias").classes("text-2xl font-bold text-slate-900 dark:text-slate-100")
+                    ui.button(icon="close", on_click=dialog.close).props("flat round dense").classes(
+                        "text-slate-500 dark:text-slate-400"
+                    )
+            else:
+                with ui.element("div").classes(
+                    "sticky top-0 z-10 w-full grid grid-cols-[1fr_auto_1fr] items-center "
+                    "p-4 bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700"
+                ):
+                    with ui.row().classes("justify-start"):
+                        ui.button("Volver", icon="chevron_left", on_click=lambda: set_vista("menu")).props(
+                            "flat no-caps dense"
+                        ).classes("text-slate-600")
+                    ui.label(titulos.get(vista, "Preferencias")).classes(
+                        "text-lg font-semibold text-slate-900 dark:text-slate-100"
+                    )
+                    with ui.row().classes("justify-end"):
+                        ui.button(icon="close", on_click=dialog.close).props("flat round dense").classes(
+                            "text-slate-500 dark:text-slate-400"
+                        )
+
+            with ui.element("div").classes("w-full flex-1 overflow-y-auto overflow-x-hidden bg-slate-50 dark:bg-slate-900"):
+                if vista == "menu":
+                    render_settings_menu()
+                elif vista == "apariencia":
+                    render_appearance_settings()
+                elif vista in {"cuentas", "sectores", "brokers", "tipos"}:
+                    render_catalog_preferences(usuario, vista)
+                else:
+                    ui.label("Opciones de configuración próximamente...").classes(
+                        "text-slate-500 dark:text-slate-400 text-center w-full mt-10"
+                    )
+
+        render_content()
     dialog.open()
 
 
@@ -1258,7 +1414,7 @@ def ultimo_valor_registrado_por_activo(df_inv):
 
 def build_operation_type_tabs(value="Compra", disabled=False):
     with ui.tabs(value=value).classes(
-        "asset-chart-tabs operation-type-tabs bg-[#F8FAFC] rounded-full p-1 flex-1"
+        "asset-chart-tabs operation-type-tabs bg-[#F8FAFC] dark:bg-slate-900 rounded-full p-1 flex-1"
     ).props('dense no-caps active-color="dark" indicator-color="transparent"') as tipo_tabs:
         compra_tab = ui.tab("Compra", label="Compra")
         venta_tab = ui.tab("Venta", label="Venta")
@@ -1269,25 +1425,31 @@ def build_operation_type_tabs(value="Compra", disabled=False):
 
 
 def style_operation_date_input(date_input, width_class="w-40"):
-    return date_input.props("type=date outlined dense").classes(
-        f"{width_class} operation-date-input rounded-lg"
+    return date_input.props(quasar_dark_props("type=date outlined dense")).classes(
+        f"{width_class} operation-date-input rounded-lg dark:bg-slate-900 "
+        "dark:text-slate-100 dark:border-slate-700"
     )
 
 
 def style_operation_number_input(number_input, text_class="text-4xl", extra_props=""):
-    props = f'outlined input-class="{text_class} font-medium text-right text-slate-900"'
+    props = f'outlined input-class="{text_class} font-medium text-right text-slate-900 dark:text-slate-100"'
     if extra_props:
         props = f"{extra_props} {props}"
-    return number_input.props(props).classes("w-full operation-number-input bg-slate-50 rounded-xl border border-slate-200")
+    return number_input.props(quasar_dark_props(props)).classes(
+        "w-full operation-number-input bg-slate-50 dark:bg-slate-900 dark:text-slate-100 "
+        "rounded-xl border border-slate-200 dark:border-slate-700"
+    )
 
 
 def build_operation_ticket_summary(tipo_select, importe_input, unidades_input, comisiones_input):
-    with ui.column().classes("w-full bg-[#FFFFFF] border border-slate-100 rounded-xl px-4 py-3 gap-2 justify-center shadow-sm"):
+    with ui.column().classes(
+        "w-full bg-[#FFFFFF] dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl px-4 py-3 gap-2 justify-center shadow-sm"
+    ):
         with ui.row().classes("justify-between w-full items-center"):
-            ui.label("Precio medio").classes("text-xs font-semibold text-slate-500")
-            precio_unitario_label = ui.label().classes("text-base font-semibold text-slate-900 text-right")
+            ui.label("Precio medio").classes("text-xs font-semibold text-slate-500 dark:text-slate-400")
+            precio_unitario_label = ui.label().classes("text-base font-semibold text-slate-900 dark:text-slate-100 text-right")
         with ui.row().classes("justify-between w-full items-center"):
-            ui.label("Impacto en cuenta").classes("text-xs font-semibold text-slate-500")
+            ui.label("Impacto en cuenta").classes("text-xs font-semibold text-slate-500 dark:text-slate-400")
             impacto_cuenta_label = ui.label().classes("text-base font-semibold text-right")
 
     def sync_ticket_summary():
@@ -1308,8 +1470,10 @@ def build_operation_ticket_summary(tipo_select, importe_input, unidades_input, c
         )
         impacto = -(importe + comisiones) if tipo_select.value == "Compra" else importe - comisiones
         impacto_cuenta_label.set_text(formato_euros(impacto))
-        impacto_cuenta_label.classes(remove="text-[#10B981] text-[#F43F5E]")
-        impacto_cuenta_label.classes(add="text-[#10B981]" if impacto >= 0 else "text-[#F43F5E]")
+        impacto_cuenta_label.classes(
+            remove="text-[#10B981] text-[#F43F5E] text-positive text-negative dark:text-emerald-400 dark:text-rose-400"
+        )
+        impacto_cuenta_label.classes(add=color_por_signo(impacto))
 
     importe_input.on_value_change(lambda _: sync_ticket_summary())
     unidades_input.on_value_change(lambda _: sync_ticket_summary())
@@ -1348,13 +1512,17 @@ def open_existing_asset_dialog(df_inv, refresh, usuario):
 
     with ui.dialog() as dialog, ui.card().classes("max-w-5xl w-full p-3 gap-3"):
         with ui.row().classes("w-full gap-4 items-start"):
-            with ui.column().classes("flex-1 bg-[#F8FAFC] p-4 rounded-2xl gap-3 border border-slate-100"):
-                ui.label("Operar con activo existente").classes("text-xl font-semibold text-slate-900")
-                ui.label("Activo").classes("text-sm font-semibold text-slate-500")
+            with ui.column().classes(
+                "flex-1 bg-[#F8FAFC] dark:bg-slate-900 p-4 rounded-2xl gap-3 border border-slate-100 dark:border-slate-700"
+            ):
+                ui.label("Operar con activo existente").classes("text-xl font-semibold text-slate-900 dark:text-slate-100")
+                ui.label("Activo").classes("text-sm font-semibold text-slate-500 dark:text-slate-400")
                 activo_select = ui.select(
                     opciones_activo,
                     value=activo_default,
-                ).props("outlined dense").classes("w-full bg-white rounded-xl")
+                ).props(quasar_dark_props("outlined dense")).classes(
+                    "w-full bg-white dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700 rounded-xl"
+                )
 
                 with ui.row().classes("w-full gap-2 flex-wrap"):
                     broker_badge = ui.label().classes(
@@ -1364,7 +1532,7 @@ def open_existing_asset_dialog(df_inv, refresh, usuario):
                         "rounded-full px-3 py-1 text-xs font-medium bg-slate-100 text-slate-700"
                     )
 
-                with ui.column().classes("w-full bg-white border border-slate-200 rounded-xl p-4 shadow-sm gap-3"):
+                with ui.column().classes("w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-sm gap-3"):
                     with ui.row().classes("w-full justify-between items-center"):
                         ui.label("Posición actual").classes("text-sm font-semibold text-slate-700")
                         feedback_spinner = ui.spinner(size="sm").classes("text-blue-600")
@@ -1374,7 +1542,7 @@ def open_existing_asset_dialog(df_inv, refresh, usuario):
                             position_units_label = ui.label().classes("text-base font-semibold text-slate-800")
                         with ui.column().classes("gap-1 min-w-0"):
                             ui.label("VALOR ESTIMADO").classes("text-[10px] uppercase font-bold tracking-wider text-slate-400")
-                            position_value_label = ui.label().classes("text-base font-bold text-slate-900")
+                            position_value_label = ui.label().classes("text-base font-bold text-slate-900 dark:text-slate-100")
                     with ui.row().classes("items-center gap-1"):
                         unit_quote_label = ui.label().classes("text-[11px] font-medium text-slate-400")
                         unit_quote_icon = ui.icon("bolt").classes("text-[13px] text-blue-600")
@@ -1382,7 +1550,9 @@ def open_existing_asset_dialog(df_inv, refresh, usuario):
                             "text-[10px] text-slate-400 font-medium"
                         )
 
-            with ui.column().classes("flex-1 bg-[#FFFFFF] p-4 rounded-2xl gap-3 border border-slate-100 min-h-[430px]"):
+            with ui.column().classes(
+                "flex-1 bg-[#FFFFFF] dark:bg-slate-800 p-4 rounded-2xl gap-3 border border-slate-100 dark:border-slate-700 min-h-[430px]"
+            ):
                 with ui.column().classes("w-full gap-3"):
                     with ui.row().classes("w-full gap-3 items-end"):
                         fecha_input = style_operation_date_input(ui.input(
@@ -1392,7 +1562,7 @@ def open_existing_asset_dialog(df_inv, refresh, usuario):
                         tipo_select = build_operation_type_tabs("Compra")
 
                     with ui.column().classes("w-full gap-1"):
-                        ui.label("IMPORTE TOTAL").classes("text-xs uppercase text-slate-500 font-bold tracking-wider")
+                        ui.label("IMPORTE TOTAL").classes("text-xs uppercase text-slate-500 dark:text-slate-400 font-bold tracking-wider")
                         importe_input = style_operation_number_input(ui.number(
                             value=0.0,
                             min=0,
@@ -1401,7 +1571,7 @@ def open_existing_asset_dialog(df_inv, refresh, usuario):
                         ))
 
                     with ui.column().classes("w-full gap-1"):
-                        ui.label("UNIDADES").classes("text-xs uppercase text-slate-500 font-bold tracking-wider")
+                        ui.label("UNIDADES").classes("text-xs uppercase text-slate-500 dark:text-slate-400 font-bold tracking-wider")
                         unidades_input = style_operation_number_input(ui.number(
                             value=0.0,
                             min=0,
@@ -1410,7 +1580,7 @@ def open_existing_asset_dialog(df_inv, refresh, usuario):
                         ))
 
                     with ui.column().classes("w-full gap-1"):
-                        ui.label("COMISIONES").classes("text-xs uppercase text-slate-500 font-bold tracking-wider")
+                        ui.label("COMISIONES").classes("text-xs uppercase text-slate-500 dark:text-slate-400 font-bold tracking-wider")
                         comisiones_input = style_operation_number_input(ui.number(
                             value=0.0,
                             min=0,
@@ -1536,84 +1706,108 @@ def open_new_asset_dialog(df_inv, refresh, usuario):
 
     with ui.dialog() as dialog, ui.card().classes("max-w-5xl w-full p-3 gap-3"):
         with ui.row().classes("w-full gap-4 items-start"):
-            with ui.column().classes("flex-1 bg-[#F8FAFC] p-4 rounded-2xl gap-3 border border-slate-100"):
-                ui.label("Añadir nuevo activo").classes("text-xl font-semibold text-slate-900")
-                ui.label("Definición del activo").classes("text-sm font-semibold text-slate-500")
+            with ui.column().classes(
+                "flex-1 bg-[#F8FAFC] dark:bg-slate-900 p-4 rounded-2xl gap-3 border border-slate-100 dark:border-slate-700"
+            ):
+                ui.label("Añadir nuevo activo").classes("text-xl font-semibold text-slate-900 dark:text-slate-100")
+                ui.label("Definición del activo").classes("text-sm font-semibold text-slate-500 dark:text-slate-400")
 
-                with ui.element("div").classes("bg-slate-100 p-1 rounded-xl w-full grid grid-cols-2 gap-1"):
-                    with ui.element("div").classes("new-asset-mode-option rounded-lg p-3 cursor-pointer transition-colors") as automatic_mode_option:
+                with ui.element("div").classes(
+                    "bg-slate-100 dark:bg-slate-900 p-1 rounded-xl w-full grid grid-cols-2 gap-1"
+                ):
+                    with ui.element("div").classes(
+                        "new-asset-mode-option rounded-lg p-3 cursor-pointer transition-colors dark:text-slate-400"
+                    ) as automatic_mode_option:
                         with ui.row().classes("items-center gap-2"):
                             ui.icon("bolt").classes("text-lg")
                             ui.label("Auto").classes("text-sm font-semibold")
-                        ui.label("Mercado / Yahoo Finance").classes("text-[11px] text-slate-500 mt-1")
-                    with ui.element("div").classes("new-asset-mode-option rounded-lg p-3 cursor-pointer transition-colors") as manual_mode_option:
+                        ui.label("Mercado / Yahoo Finance").classes("text-[11px] text-slate-500 dark:text-slate-400 mt-1")
+                    with ui.element("div").classes(
+                        "new-asset-mode-option rounded-lg p-3 cursor-pointer transition-colors dark:text-slate-400"
+                    ) as manual_mode_option:
                         with ui.row().classes("items-center gap-2"):
                             ui.icon("edit_note").classes("text-lg")
                             ui.label("Manual").classes("text-sm font-semibold")
-                        ui.label("Inmuebles, efectivo, etc.").classes("text-[11px] text-slate-500 mt-1")
+                        ui.label("Inmuebles, efectivo, etc.").classes("text-[11px] text-slate-500 dark:text-slate-400 mt-1")
 
                 with ui.column().classes("w-full gap-3") as automatic_container:
                     with ui.column().classes("w-full gap-1"):
-                        ui.label("BUSCADOR").classes("text-[11px] font-bold uppercase tracking-wider text-slate-500")
+                        ui.label("BUSCADOR").classes("text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400")
                         ticker_cotizacion_input = ui.input(
                             placeholder="Ticker o ISIN",
-                        ).props("outlined dense").classes("w-full bg-white rounded-xl")
+                        ).props(quasar_dark_props("outlined dense stack-label")).classes(
+                            "w-full bg-white dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700 rounded-xl"
+                        )
                         with ticker_cotizacion_input.add_slot("append"):
                             search_button = ui.button(icon="search").props("flat round dense")
-                        ticker_feedback = ui.label("").classes("text-xs text-[#10B981]")
+                        ticker_feedback = ui.label("").classes("text-xs text-positive dark:text-emerald-400")
 
-                    with ui.row().classes("w-full bg-white border border-blue-100 rounded-xl p-4 shadow-sm items-center justify-between gap-3 flex-nowrap") as yahoo_confirmation_card:
+                    with ui.row().classes(
+                        "w-full bg-white dark:bg-slate-800 border border-blue-100 dark:border-slate-700 rounded-xl p-4 shadow-sm items-center justify-between gap-3 flex-nowrap"
+                    ) as yahoo_confirmation_card:
                         with ui.column().classes("flex-1 min-w-0 gap-2 overflow-hidden"):
                             with ui.row().classes("w-full items-center gap-2 min-w-0 flex-nowrap overflow-hidden"):
                                 yahoo_logo_fallback = url_avatar_fallback("Activo")
                                 yahoo_asset_logo = ui.image(yahoo_logo_fallback).props(
                                     f'error-src="{yahoo_logo_fallback}"'
-                                ).classes("w-9 h-9 rounded-full shadow-sm object-contain bg-white shrink-0 flex-none")
+                                ).classes("w-9 h-9 rounded-full shadow-sm object-contain bg-white dark:bg-slate-700 shrink-0 flex-none")
                                 with ui.column().classes("flex-1 min-w-0 gap-1 overflow-hidden"):
-                                    yahoo_asset_name_label = ui.label().classes("w-full min-w-0 text-sm font-semibold text-slate-900 truncate")
+                                    yahoo_asset_name_label = ui.label().classes("w-full min-w-0 text-sm font-semibold text-slate-900 dark:text-slate-100 truncate")
                                     yahoo_asset_meta_label = ui.label().classes(
-                                        "w-full min-w-0 text-[9px] sm:text-[10px] text-slate-500 truncate leading-tight"
+                                        "w-full min-w-0 text-[9px] sm:text-[10px] text-slate-500 dark:text-slate-400 truncate leading-tight"
                                     )
                             yahoo_asset_price_label = ui.label().classes("text-xs font-semibold text-blue-700")
                         ui.icon("check_circle").classes("text-blue-600 text-xl shrink-0 flex-none")
 
-                    with ui.column().classes("w-full bg-slate-50 border border-slate-200 rounded-2xl p-5 gap-4"):
+                    with ui.column().classes("w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 gap-4"):
                         with ui.column().classes("w-full gap-1"):
-                            ui.label("BROKER / ENTIDAD").classes("text-[11px] font-bold uppercase tracking-wider text-slate-500")
+                            ui.label("BROKER / ENTIDAD").classes("text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400")
                             auto_aplicacion_select = ui.select(
                                 aplicaciones,
                                 value=aplicaciones[0] if aplicaciones else None,
-                            ).props("outlined dense").classes("w-full bg-white rounded-xl")
+                            ).props(quasar_dark_props("outlined dense")).classes(
+                                "w-full bg-white dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700 rounded-xl"
+                            )
                         with ui.column().classes("w-full gap-1"):
-                            ui.label("TIPO DE ACTIVO").classes("text-[11px] font-bold uppercase tracking-wider text-slate-500")
+                            ui.label("TIPO DE ACTIVO").classes("text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400")
                             auto_tipo_activo_select = ui.select(
                                 tipos_activo,
                                 value=tipos_activo[0] if tipos_activo else None,
-                            ).props("outlined dense").classes("w-full bg-white rounded-xl")
+                            ).props(quasar_dark_props("outlined dense")).classes(
+                                "w-full bg-white dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700 rounded-xl"
+                            )
 
-                with ui.column().classes("w-full bg-slate-50 border border-slate-200 rounded-2xl p-5 gap-4") as manual_container:
+                with ui.column().classes("w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 gap-4") as manual_container:
                     with ui.column().classes("w-full gap-1"):
-                        ui.label("NOMBRE DEL ACTIVO").classes("text-[11px] font-bold uppercase tracking-wider text-slate-500")
+                        ui.label("NOMBRE DEL ACTIVO").classes("text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400")
                         nuevo_activo_input = ui.input(
                             placeholder="Ej. Vivienda alquiler, préstamo privado...",
-                        ).props("outlined dense").classes("w-full bg-white rounded-xl")
+                        ).props(quasar_dark_props("outlined dense stack-label")).classes(
+                            "w-full bg-white dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700 rounded-xl"
+                        )
                     with ui.column().classes("w-full gap-1"):
-                        ui.label("BROKER / ENTIDAD").classes("text-[11px] font-bold uppercase tracking-wider text-slate-500")
+                        ui.label("BROKER / ENTIDAD").classes("text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400")
                         manual_aplicacion_select = ui.select(
                             aplicaciones,
                             value=aplicaciones[0] if aplicaciones else None,
-                        ).props("outlined dense").classes("w-full bg-white rounded-xl")
+                        ).props(quasar_dark_props("outlined dense")).classes(
+                            "w-full bg-white dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700 rounded-xl"
+                        )
                     with ui.column().classes("w-full gap-1"):
-                        ui.label("TIPO DE ACTIVO").classes("text-[11px] font-bold uppercase tracking-wider text-slate-500")
+                        ui.label("TIPO DE ACTIVO").classes("text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400")
                         manual_tipo_activo_select = ui.select(
                             tipos_activo,
                             value=tipos_activo[0] if tipos_activo else None,
-                        ).props("outlined dense").classes("w-full bg-white rounded-xl")
+                        ).props(quasar_dark_props("outlined dense")).classes(
+                            "w-full bg-white dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700 rounded-xl"
+                        )
 
-                divisa_cotizacion_input = ui.input(value="EUR")
+                divisa_cotizacion_input = ui.input(value="EUR").props(quasar_dark_props("outlined dense"))
                 divisa_cotizacion_input.set_visibility(False)
 
-            with ui.column().classes("flex-1 bg-[#FFFFFF] p-4 rounded-2xl gap-3 border border-slate-100 min-h-[430px]"):
+            with ui.column().classes(
+                "flex-1 bg-[#FFFFFF] dark:bg-slate-800 p-4 rounded-2xl gap-3 border border-slate-100 dark:border-slate-700 min-h-[430px]"
+            ):
                 with ui.column().classes("w-full gap-3"):
                     with ui.row().classes("w-full gap-3 items-end"):
                         fecha_input = style_operation_date_input(ui.input(
@@ -1623,7 +1817,7 @@ def open_new_asset_dialog(df_inv, refresh, usuario):
                         tipo_select = build_operation_type_tabs("Compra", disabled=True)
 
                     with ui.column().classes("w-full gap-1"):
-                        ui.label("IMPORTE TOTAL").classes("text-xs uppercase text-slate-500 font-bold tracking-wider")
+                        ui.label("IMPORTE TOTAL").classes("text-xs uppercase text-slate-500 dark:text-slate-400 font-bold tracking-wider")
                         importe_input = style_operation_number_input(ui.number(
                             value=0.0,
                             min=0,
@@ -1632,7 +1826,7 @@ def open_new_asset_dialog(df_inv, refresh, usuario):
                         ))
 
                     with ui.column().classes("w-full gap-1"):
-                        ui.label("UNIDADES").classes("text-xs uppercase text-slate-500 font-bold tracking-wider")
+                        ui.label("UNIDADES").classes("text-xs uppercase text-slate-500 dark:text-slate-400 font-bold tracking-wider")
                         unidades_input = style_operation_number_input(ui.number(
                             value=0.0,
                             min=0,
@@ -1641,7 +1835,7 @@ def open_new_asset_dialog(df_inv, refresh, usuario):
                         ))
 
                     with ui.column().classes("w-full gap-1"):
-                        ui.label("COMISIONES").classes("text-xs uppercase text-slate-500 font-bold tracking-wider")
+                        ui.label("COMISIONES").classes("text-xs uppercase text-slate-500 dark:text-slate-400 font-bold tracking-wider")
                         comisiones_input = style_operation_number_input(ui.number(
                             value=0.0,
                             min=0,
@@ -1735,8 +1929,8 @@ def open_new_asset_dialog(df_inv, refresh, usuario):
             automatico = modo_creacion_state["value"] == modo_yahoo
             automatic_container.set_visibility(automatico)
             manual_container.set_visibility(not automatico)
-            active_classes = "bg-white shadow-sm text-blue-600 border border-blue-100"
-            inactive_classes = "text-slate-500 border border-transparent"
+            active_classes = "bg-white dark:bg-slate-700 shadow-sm text-blue-600 dark:text-white border border-blue-100 dark:border-slate-700"
+            inactive_classes = "text-slate-500 dark:text-slate-400 border border-transparent"
             automatic_mode_option.classes(
                 remove=inactive_classes if automatico else active_classes,
                 add=active_classes if automatico else inactive_classes,
@@ -1883,9 +2077,11 @@ def open_investment_operation_edit_dialog(df_inv, refresh, usuario, operacion):
                     opciones_activo,
                     label="Activo",
                     value=activo_default,
-                ).classes("w-full")
+                ).props(quasar_dark_props("outlined dense")).classes("w-full")
 
-                with ui.card().classes("w-full bg-white border border-slate-200 rounded-xl p-4 gap-3") as nuevo_activo_card:
+                with ui.card().classes(
+                    "w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 gap-3"
+                ) as nuevo_activo_card:
                     modo_creacion_toggle = ui.toggle(
                         [modo_yahoo, modo_manual],
                         value=modo_yahoo,
@@ -1895,31 +2091,35 @@ def open_investment_operation_edit_dialog(df_inv, refresh, usuario, operacion):
                         ticker_cotizacion_input = ui.input(
                             "Ticker de Yahoo",
                             placeholder="SAN.MC",
-                        ).classes("w-full")
+                        ).props(quasar_dark_props("outlined dense stack-label")).classes("w-full")
                         with ticker_cotizacion_input.add_slot("append"):
                             search_button = ui.button(icon="search").props("flat round dense")
 
                     with ui.row().classes("w-full gap-3"):
-                        nuevo_activo_input = ui.input("Nombre del activo").classes("flex-1")
+                        nuevo_activo_input = ui.input("Nombre del activo").props(
+                            quasar_dark_props("outlined dense")
+                        ).classes("flex-1")
                         divisa_cotizacion_input = ui.input(
                             "Divisa",
                             value="EUR",
                             placeholder="EUR",
-                        ).classes("w-32")
+                        ).props(quasar_dark_props("outlined dense stack-label")).classes("w-32")
 
                     with ui.row().classes("w-full gap-3"):
                         aplicacion_select = ui.select(
                             aplicaciones,
                             label="Broker",
                             value=aplicaciones[0] if aplicaciones else None,
-                        ).classes("flex-1")
+                        ).props(quasar_dark_props("outlined dense")).classes("flex-1")
                         tipo_activo_select = ui.select(
                             tipos_activo,
                             label="Tipo de activo",
                             value=tipos_activo[0] if tipos_activo else None,
-                        ).classes("flex-1")
+                        ).props(quasar_dark_props("outlined dense")).classes("flex-1")
 
-            with ui.column().classes("flex-1 gap-4 bg-slate-50 border border-slate-200/80 p-5 rounded-2xl justify-between min-h-[380px]"):
+            with ui.column().classes(
+                "flex-1 gap-4 bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700 p-5 rounded-2xl justify-between min-h-[380px]"
+            ):
                 with ui.column().classes("w-full gap-4"):
                     importe_input = style_operation_number_input(ui.number(
                         "Importe (€)",
@@ -1943,10 +2143,12 @@ def open_investment_operation_edit_dialog(df_inv, refresh, usuario, operacion):
                         step=0.1,
                     ), text_class="text-3xl")
 
-                with ui.column().classes("w-full bg-[#F8FAFC] border border-slate-100 p-3.5 rounded-xl text-center text-sm font-medium mt-auto gap-2"):
+                with ui.column().classes(
+                    "w-full bg-[#F8FAFC] dark:bg-slate-900 border border-slate-100 dark:border-slate-700 p-3.5 rounded-xl text-center text-sm font-medium mt-auto gap-2"
+                ):
                     with ui.row().classes("justify-between w-full items-center"):
                         ui.label("Precio medio").classes("text-slate-600")
-                        precio_unitario_label = ui.label().classes("font-semibold text-slate-900")
+                        precio_unitario_label = ui.label().classes("font-semibold text-slate-900 dark:text-slate-100")
                     with ui.row().classes("justify-between w-full items-center"):
                         ui.label("Impacto en cuenta").classes("text-slate-600")
                         impacto_cuenta_label = ui.label().classes("font-semibold")
@@ -1993,8 +2195,10 @@ def open_investment_operation_edit_dialog(df_inv, refresh, usuario, operacion):
                 )
             impacto = -(importe + comisiones) if tipo_select.value == "Compra" else importe - comisiones
             impacto_cuenta_label.set_text(formato_euros(impacto))
-            impacto_cuenta_label.classes(remove="text-[#10B981] text-[#F43F5E]")
-            impacto_cuenta_label.classes(add="text-[#10B981]" if impacto >= 0 else "text-[#F43F5E]")
+            impacto_cuenta_label.classes(
+                remove="text-[#10B981] text-[#F43F5E] text-positive text-negative dark:text-emerald-400 dark:text-rose-400"
+            )
+            impacto_cuenta_label.classes(add=color_por_signo(impacto))
 
         importe_input.on_value_change(lambda _: sync_precio_unitario())
         unidades_input.on_value_change(lambda _: sync_precio_unitario())
@@ -2176,14 +2380,16 @@ def open_investment_entry_dialog(df_inv, refresh, usuario):
         await autofill_entries()
 
     with ui.dialog() as dialog, ui.card().classes("dialog-card investment-entry-dialog"):
-        ui.label("Actualizar valoración").classes("text-2xl font-semibold text-slate-900")
+        ui.label("Actualizar valoración").classes("text-2xl font-semibold text-slate-900 dark:text-slate-100")
 
         with ui.row().classes("w-full justify-between items-center mb-4 gap-3"):
             fecha_input = ui.input("Fecha de registro", value=date.today().isoformat()).props(
-                "type=date outlined dense color=blue-8"
-            ).classes("w-52 operation-date-input rounded-lg")
+                quasar_dark_props("type=date outlined dense color=blue-8")
+            ).classes(
+                "w-52 operation-date-input rounded-lg dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700"
+            )
             with fecha_input.add_slot("prepend"):
-                ui.icon("event").classes("text-slate-400")
+                ui.icon("event").classes("text-slate-400 dark:text-slate-400")
 
             with ui.row().classes("items-center gap-2"):
                 autofill_spinner = ui.spinner(size="sm").classes("text-blue-600")
@@ -2194,14 +2400,16 @@ def open_investment_entry_dialog(df_inv, refresh, usuario):
                     on_click=run_autofill_entries,
                     color="primary",
                 ).props("outline no-caps").classes(
-                    "rounded-xl px-4 py-2 font-semibold text-[#2563EB] border border-blue-100 bg-blue-50/40 hover:bg-blue-50"
+                    "rounded-xl px-4 py-2 font-semibold text-[#2563EB] dark:text-slate-300 "
+                    "border border-blue-100 dark:border-slate-600 bg-blue-50/40 dark:bg-transparent "
+                    "hover:bg-blue-50 dark:hover:bg-slate-700"
                 )
 
         ui.separator().classes("w-full bg-slate-100")
 
         ui.label(
             "Completa el valor actual de mercado. Si el activo tiene compras o ventas registradas, el capital invertido se recalcula automáticamente."
-        ).classes("text-sm text-slate-500")
+        ).classes("text-sm text-slate-500 dark:text-slate-400")
 
         def sync_selection_controls():
             for fila in filas:
@@ -2215,7 +2423,8 @@ def open_investment_entry_dialog(df_inv, refresh, usuario):
             "flat no-caps dense"
         ).classes(
             "self-start rounded-xl px-3 py-1.5 font-semibold text-[#2563EB] "
-            "bg-blue-50/40 hover:bg-blue-50 border border-blue-100"
+            "dark:text-slate-300 bg-blue-50/40 dark:bg-transparent hover:bg-blue-50 "
+            "dark:hover:bg-slate-700 border border-blue-100 dark:border-slate-600"
         )
         rows_container = ui.column().classes("w-full gap-3 investment-entry-rows")
 
@@ -2227,35 +2436,41 @@ def open_investment_entry_dialog(df_inv, refresh, usuario):
             fallback_logo = url_avatar_fallback(row["inversion"])
             logo_url = (cotizacion.get("logo_url") or "").strip() or fallback_logo
             with ui.element("div").classes(
-                "investment-valuation-card bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"
+                "investment-valuation-card bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm"
             ):
                 with ui.row().classes("w-full items-center gap-3"):
                     incluir_checkbox = ui.checkbox(value=True).props("dense").classes("shrink-0")
                     incluir_checkbox.set_visibility(selection_mode["active"])
                     ui.image(logo_url).props(f'error-src="{fallback_logo}"').classes(
-                        "w-10 h-10 rounded-full shadow-sm object-contain bg-white shrink-0"
+                        "w-10 h-10 rounded-full shadow-sm object-contain bg-white dark:bg-slate-700 shrink-0"
                     )
 
                     with ui.column().classes("min-w-0 flex-[1.4] gap-1"):
                         with ui.row().classes("items-center gap-2 min-w-0"):
-                            ui.label(row["inversion"]).classes("font-semibold text-slate-900 truncate")
+                            ui.label(row["inversion"]).classes("font-semibold text-slate-900 dark:text-slate-100 truncate")
                             if ticker:
                                 ui.label(ticker).classes(
-                                    "bg-slate-100 text-slate-500 rounded text-xs px-2 py-0.5 font-medium"
+                                    "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded text-xs px-2 py-0.5 font-medium"
                                 )
-                        with ui.row().classes("items-center gap-2 text-xs text-slate-500"):
+                        with ui.row().classes("items-center gap-2 text-xs text-slate-500 dark:text-slate-400"):
                             ui.label(row["tipo_activo"] or "Sin clasificar").classes("truncate")
                             ui.label("·").classes("text-slate-300")
                             ui.label(row["aplicacion"] or "Sin broker").classes("truncate")
 
                     with ui.row().classes("items-center gap-6 flex-[1.15] justify-end"):
                         with ui.column().classes("gap-0 items-end min-w-[120px]"):
-                            ui.label("VALOR INICIAL").classes("text-[10px] uppercase font-bold tracking-wider text-slate-400")
-                            ui.label(formato_euros_sin_signo(dinero_inicial)).classes("text-sm font-semibold text-slate-700")
+                            ui.label("VALOR INICIAL").classes(
+                                "text-[10px] uppercase font-bold tracking-wider text-slate-400 dark:text-slate-400"
+                            )
+                            ui.label(formato_euros_sin_signo(dinero_inicial)).classes(
+                                "text-sm font-semibold text-slate-700 dark:text-slate-200"
+                            )
                         with ui.column().classes("gap-0 items-end min-w-[140px]"):
-                            ui.label("ÚLTIMO VALOR").classes("text-[10px] uppercase font-bold tracking-wider text-slate-400")
+                            ui.label("ÚLTIMO VALOR").classes(
+                                "text-[10px] uppercase font-bold tracking-wider text-slate-400 dark:text-slate-400"
+                            )
                             if ultimo_valor is None:
-                                ui.label("-").classes("text-sm font-semibold text-slate-500")
+                                ui.label("-").classes("text-sm font-semibold text-slate-500 dark:text-slate-400")
                             else:
                                 diferencia_ultimo = float(ultimo_valor or 0) - dinero_inicial
                                 ui.label(formato_euros_sin_signo(float(ultimo_valor or 0))).classes(
@@ -2263,14 +2478,17 @@ def open_investment_entry_dialog(df_inv, refresh, usuario):
                                 )
 
                     with ui.column().classes("w-44 gap-1"):
-                        ui.label("VALOR ACTUAL").classes("text-[10px] uppercase font-bold tracking-wider text-slate-400 text-right")
+                        ui.label("VALOR ACTUAL").classes(
+                            "text-[10px] uppercase font-bold tracking-wider text-slate-400 dark:text-slate-400 text-right"
+                        )
                         valor_input = ui.number(
                             value=None,
                             min=0,
                             step=10,
                             suffix=valuation_currency_suffix(cotizacion),
-                        ).props('outlined dense input-class="text-right"').classes(
-                            "w-full operation-number-input rounded-xl bg-slate-50"
+                        ).props(quasar_dark_props('outlined dense input-class="text-right"')).classes(
+                            "w-full operation-number-input rounded-xl bg-slate-50 dark:bg-slate-900 "
+                            "dark:text-slate-100 dark:border-slate-700"
                         )
                         status_label = ui.label("").classes("text-xs text-gray-500")
             filas.append({
@@ -2430,7 +2648,7 @@ def open_investment_entry_dialog(df_inv, refresh, usuario):
 
         with ui.row().classes("w-full justify-between items-center pt-4 mt-2 border-t border-slate-100"):
             ui.button("Cancelar", on_click=dialog.close, color="grey").props("flat no-caps").classes(
-                "text-slate-500"
+                "text-slate-500 dark:text-slate-400"
             )
             ui.button("Guardar Valoraciones", on_click=save_entries, color="primary").props(
                 "unelevated no-caps"
@@ -2451,13 +2669,19 @@ def open_investment_record_edit_dialog(row, refresh, usuario):
         ui.label(row["inversion"]).classes("text-lg font-semibold")
 
         with ui.row().classes("w-full gap-3"):
-            fecha_input = ui.input("Fecha", value=str(row["fecha"])).props("type=date").classes("w-48")
+            fecha_input = ui.input("Fecha", value=str(row["fecha"])).props(
+                quasar_dark_props("type=date outlined dense")
+            ).classes(
+                "w-48 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700"
+            )
             valor_input = ui.number(
                 "Valor actual (€)",
                 value=float(row["valor_actual"] or 0),
                 min=0,
                 step=10,
-            ).classes("flex-1")
+            ).props(quasar_dark_props("outlined dense")).classes(
+                "flex-1 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700"
+            )
 
         with ui.row().classes("w-full gap-3"):
             ui.label(f"Tipo: {row['tipo_activo'] or 'Sin clasificar'}").classes("text-sm text-gray-600")
@@ -2507,7 +2731,7 @@ def open_investment_record_edit_dialog(row, refresh, usuario):
     dialog.open()
 
 
-def open_asset_detail_dialog(inversion, df_inv, refresh, usuario):
+def open_asset_detail_dialog(inversion, df_inv, refresh, usuario, is_dark=False):
     df_asset = filtrar_por_activo(df_inv, inversion)
     df_asset_ops = operaciones_con_posicion(
         filtrar_por_activo(cargar_datos("operaciones_inversion", usuario), inversion)
@@ -2533,7 +2757,7 @@ def open_asset_detail_dialog(inversion, df_inv, refresh, usuario):
                         with ui.column().classes("w-full gap-2"):
                             with ui.row().classes("w-full justify-end"):
                                 with ui.tabs().classes(
-                                    "asset-chart-tabs bg-[#F8FAFC] rounded-full p-1"
+                                    "asset-chart-tabs bg-[#F8FAFC] dark:bg-slate-900 rounded-full p-1"
                                 ).props(
                                     'dense no-caps active-color="dark" indicator-color="transparent"'
                                 ) as asset_chart_tabs:
@@ -2544,13 +2768,13 @@ def open_asset_detail_dialog(inversion, df_inv, refresh, usuario):
                                 "w-full asset-chart-panels"
                             ).props('animated transition-prev="fade" transition-next="fade"'):
                                 with ui.tab_panel(position_tab).classes("asset-chart-tab-panel"):
-                                    fig_position = build_investment_evolution_chart(evolucion)
-                                    ui.plotly(prepare_chart(fig_position, 500)).classes(
+                                    fig_position = build_investment_evolution_chart(evolucion, is_dark=is_dark)
+                                    ui.plotly(prepare_chart(fig_position, 500, is_dark=is_dark)).classes(
                                         "plotly-chart asset-detail-plot"
                                     )
                                 with ui.tab_panel(unit_price_tab).classes("asset-chart-tab-panel"):
-                                    fig_unit_price = build_asset_unit_price_chart(chart_data)
-                                    ui.plotly(prepare_chart(fig_unit_price, 500)).classes(
+                                    fig_unit_price = build_asset_unit_price_chart(chart_data, is_dark=is_dark)
+                                    ui.plotly(prepare_chart(fig_unit_price, 500, is_dark=is_dark)).classes(
                                         "plotly-chart asset-detail-plot"
                                     )
 
@@ -2589,7 +2813,7 @@ def open_asset_detail_dialog(inversion, df_inv, refresh, usuario):
                             ui.label(row["tipo"]).classes(
                                 "font-semibold text-blue-700"
                                 if row["tipo"] == "Compra"
-                                else "font-semibold text-green-700"
+                                else "font-semibold text-green-700 dark:text-emerald-400"
                             )
                             ui.label(formato_unidades(row.get("unidades"))).classes("font-semibold")
                             ui.label(formato_unidades(row.get("posicion_unidades"))).classes("font-semibold")
@@ -2604,7 +2828,7 @@ def open_asset_detail_dialog(inversion, df_inv, refresh, usuario):
     dialog.open()
 
 
-def open_historical_analysis_dialog(df_inv, df_ops, refresh, usuario):
+def open_historical_analysis_dialog(df_inv, df_ops, refresh, usuario, is_dark=False):
     df_activos = cargar_datos("activos", usuario)
     activos_historicos = construir_activos_historicos(df_inv, df_ops, df_activos)
     distribucion = distribucion_historica_por_tipo(activos_historicos)
@@ -2644,8 +2868,8 @@ def open_historical_analysis_dialog(df_inv, df_ops, refresh, usuario):
                         if distribucion.empty:
                             ui.label("No hay datos suficientes para calcular la distribución.").classes("text-gray-500")
                         else:
-                            fig_historico = build_historical_asset_type_chart(distribucion)
-                            ui.plotly(prepare_chart(fig_historico, 460)).classes(
+                            fig_historico = build_historical_asset_type_chart(distribucion, is_dark=is_dark)
+                            ui.plotly(prepare_chart(fig_historico, 460, is_dark=is_dark)).classes(
                                 "plotly-chart historical-analysis-plot"
                             )
 
@@ -2657,11 +2881,12 @@ def open_historical_analysis_dialog(df_inv, df_ops, refresh, usuario):
                             refresh,
                             usuario,
                             "Aún no hay activos registrados.",
+                            is_dark=is_dark,
                         )
     dialog.open()
 
 
-def render_inversiones(refresh, usuario):
+def render_inversiones(refresh, usuario, is_dark=False):
     df_inv = cargar_datos("inversiones", usuario)
     df_ops = cargar_datos("operaciones_inversion", usuario)
 
@@ -2670,16 +2895,18 @@ def render_inversiones(refresh, usuario):
             ui.label("Aún no hay operaciones de inversión registradas.").classes("text-gray-500")
             return
         operaciones = df_ops.sort_values(["fecha", "id"], ascending=[False, False])
-        with ui.card().classes("table-card history-table-card"):
-            with ui.element("div").classes("history-table-scroll"):
-                with ui.element("div").classes("table-header investment-ops-table"):
+        with ui.card().classes("table-card history-table-card dark:bg-slate-800"):
+            with ui.element("div").classes("history-table-scroll dark:bg-transparent"):
+                with ui.element("div").classes("table-header investment-ops-table dark:bg-transparent"):
                     for label in ["Fecha", "Tipo", "Activo", "Unidades", "Importe", "Comisiones", ""]:
                         ui.label(label).classes("font-semibold")
                 for _, row in operaciones.iterrows():
-                    with ui.element("div").classes("table-row investment-ops-table"):
+                    with ui.element("div").classes("table-row investment-ops-table dark:bg-transparent"):
                         ui.label(str(row["fecha"]))
                         ui.label(row["tipo"]).classes(
-                            "font-semibold text-blue-700" if row["tipo"] == "Compra" else "font-semibold text-green-700"
+                            "font-semibold text-blue-700"
+                            if row["tipo"] == "Compra"
+                            else "font-semibold text-green-700 dark:text-emerald-400"
                         )
                         ui.label(row["inversion"])
                         ui.label(formato_unidades(row.get("unidades"))).classes("font-semibold")
@@ -2697,15 +2924,15 @@ def render_inversiones(refresh, usuario):
         historial = df_inv.sort_values("fecha", ascending=False)
         for fecha, registros in historial.groupby("fecha", sort=False):
             ui.label(str(fecha)).classes("date-group")
-            with ui.card().classes("table-card history-table-card"):
-                with ui.element("div").classes("history-table-scroll"):
-                    with ui.element("div").classes("table-header investments-table"):
+            with ui.card().classes("table-card history-table-card dark:bg-slate-800"):
+                with ui.element("div").classes("history-table-scroll dark:bg-transparent"):
+                    with ui.element("div").classes("table-header investments-table dark:bg-transparent"):
                         for label in ["Inversión", "Tipo", "Inicial", "Valor actual", "Ganancia (%)", "Ganancia", "Aplicación", ""]:
                             ui.label(label).classes("font-semibold")
                     for _, row in registros.iterrows():
                         ganancia = row["valor_actual"] - row["dinero_inicial"]
                         ganancia_pct = (ganancia / row["dinero_inicial"] * 100) if row["dinero_inicial"] else 0.0
-                        with ui.element("div").classes("table-row investments-table"):
+                        with ui.element("div").classes("table-row investments-table dark:bg-transparent"):
                             ui.label(row["inversion"])
                             ui.label(row["tipo_activo"] or "Sin clasificar")
                             ui.label(formato_euros_sin_signo(row["dinero_inicial"]))
@@ -2728,10 +2955,12 @@ def render_inversiones(refresh, usuario):
                 operations_tab = ui.tab("operaciones", label="Historial de operaciones", icon="swap_horiz")
                 records_tab = ui.tab("registros", label="Historial de registros", icon="fact_check")
 
-            with ui.tab_panels(history_tabs, value=operations_tab).classes("w-full history-dialog-body"):
-                with ui.tab_panel(operations_tab).classes("history-tab-panel"):
+            with ui.tab_panels(history_tabs, value=operations_tab).classes(
+                "w-full history-dialog-body dark:bg-transparent"
+            ):
+                with ui.tab_panel(operations_tab).classes("history-tab-panel dark:bg-transparent"):
                     render_operation_history()
-                with ui.tab_panel(records_tab).classes("history-tab-panel"):
+                with ui.tab_panel(records_tab).classes("history-tab-panel dark:bg-transparent"):
                     render_record_history()
         dialog.open()
 
@@ -2782,8 +3011,8 @@ def render_inversiones(refresh, usuario):
                 ui.label("Evolución de la Cartera").classes("section-title")
                 evolucion = calcular_evolucion_inversiones(df_inv)
                 if not evolucion.empty:
-                    fig = build_investment_evolution_chart(evolucion)
-                    ui.plotly(prepare_chart(fig, 420)).classes("plotly-chart")
+                    fig = build_investment_evolution_chart(evolucion, is_dark=is_dark)
+                    ui.plotly(prepare_chart(fig, 420, is_dark=is_dark)).classes("plotly-chart")
 
             with ui.card().classes("chart-card"):
                 ui.label("Distribución actual por tipo de activo").classes("section-title")
@@ -2800,7 +3029,7 @@ def render_inversiones(refresh, usuario):
                     )
                     fig_tipos.update_traces(textposition="inside", textinfo="percent+label")
                     fig_tipos.update_layout(showlegend=False)
-                    ui.plotly(prepare_chart(fig_tipos, 420)).classes("plotly-chart")
+                    ui.plotly(prepare_chart(fig_tipos, 420, is_dark=is_dark)).classes("plotly-chart")
 
         activos_actuales = ultimas_valoraciones(df_inv)
         if not activos_actuales.empty:
@@ -2820,7 +3049,7 @@ def render_inversiones(refresh, usuario):
                         hole=0.4,
                         color_discrete_sequence=CHART_COLORS,
                     )
-                    ui.plotly(prepare_chart(fig_activos, 420)).classes("plotly-chart")
+                    ui.plotly(prepare_chart(fig_activos, 420, is_dark=is_dark)).classes("plotly-chart")
 
             with ui.card().classes("chart-card"):
                 ui.label("Activos actuales").classes("section-title")
@@ -2830,6 +3059,7 @@ def render_inversiones(refresh, usuario):
                     refresh,
                     usuario,
                     "Aún no hay inversiones activas registradas.",
+                    is_dark=is_dark,
                 )
 
     with ui.row().classes("w-full justify-center gap-3"):
@@ -2837,5 +3067,5 @@ def render_inversiones(refresh, usuario):
         ui.button(
             "Análisis histórico",
             icon="bar_chart",
-            on_click=lambda: open_historical_analysis_dialog(df_inv, df_ops, refresh, usuario),
+            on_click=lambda: open_historical_analysis_dialog(df_inv, df_ops, refresh, usuario, is_dark=is_dark),
         ).props("outline")

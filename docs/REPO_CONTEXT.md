@@ -251,16 +251,27 @@ Routes:
 - `/service-worker.js`: simple app-shell cache.
 
 The authenticated header shows a circular user avatar with the user's initial.
-Its dropdown menu contains "Preferencias", which opens a right-side slide-over
-preferences drawer with the brokers/asset-types catalog section, and
-"Cerrar sesión" for logout.
+The Preferences drawer includes an "Apariencia" section with a dark/light mode
+switch. The theme control uses NiceGUI `ui.dark_mode` and stores the current
+boolean preference in `app.storage.user["dark_mode"]`.
+When the theme changes, the active tab is re-rendered so Plotly charts can be
+rebuilt with the shared `aplicar_tema_grafica(fig, is_dark)` helper, which
+switches between `plotly_dark` and `plotly_white` with transparent chart
+backgrounds and theme-aware axis/grid colors.
+The avatar dropdown menu contains "Preferencias", which opens a right-side
+slide-over settings hub with drill-down rows for profile, appearance,
+notifications, accounts, sectors, brokers and asset types, and "Cerrar sesión"
+for logout.
 
 Main tabs:
 
 - `saldo`: net worth summary, liquidity by account, investments pie, and
   branded area charts for liquidity over time and total net worth over time.
 - `movimientos`: add income/expense, add account transfer, bulk import `.txt`,
-  filters, edit/delete movements, edit accounts/sectors. The movements table
+  filters and edit/delete movements. The manual registration card uses a
+  segmented control to switch between operations and transfers, a prominent
+  amount input, compact data fields and a single full-width save action. The
+  movements table
   uses SQL pagination and incremental rendering in 50-row batches as the user
   scrolls.
 - `analisis`: persisted date/sector filters, sector expense/income/balance
@@ -302,8 +313,10 @@ New users get `needs_initial_setup=True` and see a three-step catalog setup for
 accounts, sectors and brokers. Choosing "Configurar mas adelante" applies the
 default catalogs.
 
-The Preferences drawer directly embeds the brokers and asset-types catalog
-editor as a two-column vault-style card grid with inline add cards.
+The Preferences drawer starts on a grouped settings menu. Accounts, sectors,
+brokers and asset types drill down into two-column vault-style catalog grids
+with inline add cards; profile, appearance and notifications currently show
+placeholder panels.
 
 ## Database Schema
 

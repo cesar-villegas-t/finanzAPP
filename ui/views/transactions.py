@@ -21,9 +21,9 @@ from ui.components import (
     euro_label,
     formato_euros,
     formato_euros_sin_signo,
-    open_catalog_editor_dialog,
     open_duplicate_dialog,
     open_edit_transaction_dialog,
+    quasar_dark_props,
     refresh_view,
 )
 
@@ -122,7 +122,7 @@ def open_bulk_import_dialog(refresh, usuario):
     dialog.open()
 
 
-def render_ingresos_gastos(refresh, usuario):
+def render_ingresos_gastos(refresh, usuario, is_dark=False):
     ui.label("Registro de Transacciones").classes("page-title")
     form_mode = {"value": "operacion"}
     batch_size = 50
@@ -171,17 +171,6 @@ def render_ingresos_gastos(refresh, usuario):
         partes.append(f"{filtros['orden']} {filtros['direccion'].lower()}")
         return " - ".join(partes)
 
-    def open_accounts_editor(on_close=None):
-        open_catalog_editor_dialog(
-            titulo="Editar cuentas",
-            tabla="cuentas",
-            columna_uso="cuenta",
-            input_label="Nueva cuenta",
-            add_button_label="Añadir cuenta",
-            usuario=usuario,
-            on_close=on_close,
-        )
-
     def open_filters_dialog(render_movements):
         cuentas = opciones_filtro("cuenta")
         sectores = opciones_filtro("sector")
@@ -195,17 +184,23 @@ def render_ingresos_gastos(refresh, usuario):
                     label="Tipo",
                     value=filtros["tipos"].copy(),
                     multiple=True,
-                ).classes("flex-1")
+                ).props(
+                    quasar_dark_props("outlined dense", is_dark)
+                ).classes("flex-1 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700")
                 orden_select = ui.select(
                     list(ORDEN_MOVIMIENTOS),
                     label="Ordenar por",
                     value=filtros["orden"],
-                ).classes("flex-1")
+                ).props(
+                    quasar_dark_props("outlined dense", is_dark)
+                ).classes("flex-1 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700")
                 direccion_select = ui.select(
                     ["Descendente", "Ascendente"],
                     label="Dirección",
                     value=filtros["direccion"],
-                ).classes("flex-1")
+                ).props(
+                    quasar_dark_props("outlined dense", is_dark)
+                ).classes("flex-1 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700")
 
             with ui.row().classes("w-full gap-3 items-start"):
                 cuentas_select = ui.select(
@@ -213,13 +208,17 @@ def render_ingresos_gastos(refresh, usuario):
                     label="Cuentas",
                     value=filtros["cuentas"].copy(),
                     multiple=True,
-                ).classes("flex-1")
+                ).props(
+                    quasar_dark_props("outlined dense", is_dark)
+                ).classes("flex-1 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700")
                 sectores_select = ui.select(
                     sectores,
                     label="Sectores",
                     value=filtros["sectores"].copy(),
                     multiple=True,
-                ).classes("flex-1")
+                ).props(
+                    quasar_dark_props("outlined dense", is_dark)
+                ).classes("flex-1 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700")
 
             def reset_filters():
                 tipos_select.value = TIPOS_MOVIMIENTO.copy()
@@ -248,7 +247,7 @@ def render_ingresos_gastos(refresh, usuario):
 
         dialog.open()
 
-    with ui.card().classes("form-card"):
+    with ui.card().classes("form-card max-w-xl mx-auto"):
         @ui.refreshable
         def render_form():
             opciones_cuenta = opciones_recientes_movimientos(
@@ -273,9 +272,54 @@ def render_ingresos_gastos(refresh, usuario):
                     select.value = valor_preferido(opciones, valor_actual)
                 select.update()
 
+            def set_form_mode(mode):
+                if mode not in {"operacion", "traspaso"} or mode == form_mode["value"]:
+                    return
+                form_mode["value"] = mode
+                render_form.refresh()
+
+            def style_entry_field(field, save_function, width_class="w-full"):
+                return field.props(quasar_dark_props("outlined dense color=blue-8", is_dark)).classes(
+                    f"{width_class} transaction-entry-field rounded-xl bg-slate-100 dark:bg-slate-900 "
+                    "dark:text-slate-100 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900"
+                ).on("keydown.enter", lambda _: save_function())
+
+            def reveal_placeholder_on_focus(field, placeholder):
+                field.on("focus", lambda _: field.props(f'placeholder="{placeholder}"'))
+                field.on("blur", lambda _: field.props(remove="placeholder"))
+                return field
+
+            def style_hero_amount(field, save_function, signed=False):
+                classes = (
+                    "w-full max-w-md transaction-hero-amount bg-transparent dark:bg-transparent "
+                    "border-none dark:text-slate-100 dark:border-transparent"
+                )
+                if signed:
+                    classes = f"{classes} signed-amount-input"
+                return field.props(
+                    quasar_dark_props(
+                        'borderless input-class="text-4xl font-bold text-right text-slate-900 dark:text-slate-100"',
+                        is_dark,
+                    )
+                ).classes(classes).on("keydown.enter", lambda _: save_function())
+
+            with ui.row().classes("w-full items-center justify-center relative"):
+                with ui.tabs(value=form_mode["value"]).classes(
+                    "asset-chart-tabs transaction-mode-tabs bg-[#F8FAFC] dark:bg-slate-900 rounded-full p-1 w-full max-w-sm"
+                ).props('dense no-caps active-color="dark" indicator-color="transparent"') as mode_tabs:
+                    ui.tab("operacion", label="Operación")
+                    ui.tab("traspaso", label="Traspaso")
+                mode_tabs.on("update:model-value", lambda event: set_form_mode(event.args))
+                if form_mode["value"] == "operacion":
+                    with ui.button(
+                        icon="upload_file",
+                        on_click=lambda: open_bulk_import_dialog(refresh, usuario),
+                    ).props("flat round dense").classes(
+                        "absolute right-0 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400"
+                    ):
+                        ui.tooltip("Importar registros desde .txt")
+
             if form_mode["value"] == "traspaso":
-                ui.label("Traspaso entre cuentas").classes("section-title")
-                fecha_input = ui.input("Fecha", value=date.today().isoformat()).props("type=date").classes("w-48")
                 ultima_cuenta_origen, ultima_cuenta_destino = ultimo_traspaso_entre_cuentas_usuario(usuario)
                 cuenta_origen_default = (
                     ultima_cuenta_origen if ultima_cuenta_origen in opciones_cuenta else opciones_cuenta[0]
@@ -283,31 +327,44 @@ def render_ingresos_gastos(refresh, usuario):
                 cuenta_destino_default = (
                     ultima_cuenta_destino if ultima_cuenta_destino in opciones_cuenta else opciones_cuenta[0]
                 )
-                with ui.row().classes("w-full gap-3"):
-                    importe_input = ui.number("Importe (€)", value=None, min=0, step=1).classes("flex-1")
-                    descripcion_input = ui.input("Descripción", placeholder="Ej: traspaso mensual").classes("flex-1")
 
-                with ui.row().classes("w-full gap-3 items-start"):
-                    with ui.column().classes("flex-1 gap-2"):
-                        cuenta_origen_select = ui.select(
-                            opciones_cuenta,
-                            label="Cuenta origen",
-                            value=cuenta_origen_default,
-                        ).classes("w-full")
-                        nueva_cuenta_origen = ui.input("Nueva cuenta origen").classes("w-full")
-                    with ui.column().classes("flex-1 gap-2"):
-                        with ui.row().classes("w-full gap-2 items-center"):
+                with ui.column().classes("w-full items-center gap-1 py-4"):
+                    ui.label("Importe (€)").classes("text-xs uppercase font-bold text-slate-400 tracking-wider")
+                    importe_input = ui.number(value=None, min=0, step=1, suffix="€")
+                    style_hero_amount(importe_input, lambda: save_transfer())
+
+                with ui.column().classes("w-full bg-slate-50 dark:bg-slate-900 rounded-2xl p-4 space-y-3 gap-0"):
+                    descripcion_input = ui.input(
+                        "Descripción",
+                    )
+                    reveal_placeholder_on_focus(descripcion_input, "Ej: traspaso mensual")
+                    style_entry_field(descripcion_input, lambda: save_transfer())
+
+                    with ui.element("div").classes("w-full grid grid-cols-1 md:grid-cols-2 gap-3"):
+                        fecha_input = ui.input("Fecha", value=date.today().isoformat()).props(
+                            "type=date prepend-icon=calendar_month"
+                        )
+                        style_entry_field(fecha_input, lambda: save_transfer())
+                        with ui.column().classes("w-full gap-2"):
+                            cuenta_origen_select = ui.select(
+                                opciones_cuenta,
+                                label="Cuenta",
+                                value=cuenta_origen_default,
+                            )
+                            style_entry_field(cuenta_origen_select, lambda: save_transfer())
+                            nueva_cuenta_origen = ui.input("Nueva cuenta origen")
+                            style_entry_field(nueva_cuenta_origen, lambda: save_transfer())
+
+                    with ui.element("div").classes("w-full grid grid-cols-1 md:grid-cols-2 gap-3"):
+                        with ui.column().classes("w-full gap-2"):
                             cuenta_destino_select = ui.select(
                                 opciones_cuenta,
                                 label="Cuenta destino",
                                 value=cuenta_destino_default,
-                            ).classes("flex-1")
-                            ui.button(
-                                "Editar cuentas",
-                                icon="settings",
-                                on_click=lambda: open_accounts_editor(refresh_transfer_account_options),
-                            ).props("outline dense").classes("text-xs")
-                        nueva_cuenta_destino = ui.input("Nueva cuenta destino").classes("w-full")
+                            )
+                            style_entry_field(cuenta_destino_select, lambda: save_transfer())
+                            nueva_cuenta_destino = ui.input("Nueva cuenta destino")
+                            style_entry_field(nueva_cuenta_destino, lambda: save_transfer())
 
                 nueva_cuenta_origen.set_visibility(False)
                 nueva_cuenta_destino.set_visibility(False)
@@ -361,72 +418,52 @@ def render_ingresos_gastos(refresh, usuario):
                     )
                     refresh_view(refresh, f"Traspaso de {formato_euros_sin_signo(importe)} registrado correctamente.")
 
-                def show_operation_form():
-                    form_mode["value"] = "operacion"
-                    render_form.refresh()
-
-                with ui.row().classes("self-start gap-2"):
-                    ui.button("Registrar traspaso", icon="swap_horiz", on_click=save_transfer)
-                    ui.button(
-                        "Añadir nueva operación",
-                        icon="receipt_long",
-                        on_click=show_operation_form,
-                    ).props("outline")
+                ui.button("Registrar traspaso", icon="swap_horiz", on_click=save_transfer).props(
+                    "unelevated no-caps size=lg"
+                ).classes(
+                    "w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl py-2.5 text-base"
+                )
                 return
 
-            with ui.row().classes("items-center gap-2"):
-                ui.label("Añadir nueva operación").classes("section-title")
-                with ui.button(
-                    icon="upload_file",
-                    on_click=lambda: open_bulk_import_dialog(refresh, usuario),
-                ).props("outline round dense"):
-                    ui.tooltip("Importar registros desde .txt")
-            fecha_input = ui.input(
-                "Fecha",
-                value=ultimo_form.get("fecha") or date.today().isoformat(),
-            ).props("type=date").classes("w-48")
-            with ui.row().classes("w-full gap-3"):
-                importe_input = ui.number("Importe (€)", value=None, step=1).classes(
-                    "flex-1 signed-amount-input"
-                )
+            with ui.column().classes("w-full items-center gap-1 py-4"):
+                ui.label("Importe (€)").classes("text-xs uppercase font-bold text-slate-400 tracking-wider")
+                importe_input = ui.number(value=None, step=1, suffix="€")
+                style_hero_amount(importe_input, lambda: save_transaction(), signed=True)
                 importe_input.on_value_change(lambda e: actualizar_color_importe(importe_input, e.value))
-                descripcion_input = ui.input("Descripción", placeholder="Ej: compra supermercado").classes("flex-1")
 
-            with ui.row().classes("w-full gap-3 items-start"):
-                with ui.column().classes("flex-1 gap-2"):
-                    with ui.row().classes("w-full gap-2 items-center"):
+            with ui.column().classes("w-full bg-slate-50 dark:bg-slate-900 rounded-2xl p-4 space-y-3 gap-0"):
+                descripcion_input = ui.input(
+                    "Descripción",
+                )
+                reveal_placeholder_on_focus(descripcion_input, "Ej: compra supermercado")
+                style_entry_field(descripcion_input, lambda: save_transaction())
+
+                with ui.element("div").classes("w-full grid grid-cols-1 md:grid-cols-2 gap-3"):
+                    fecha_input = ui.input(
+                        "Fecha",
+                        value=ultimo_form.get("fecha") or date.today().isoformat(),
+                    ).props("type=date prepend-icon=calendar_month")
+                    style_entry_field(fecha_input, lambda: save_transaction())
+                    with ui.column().classes("w-full gap-2"):
                         cuenta_select = ui.select(
                             opciones_cuenta,
                             label="Cuenta",
                             value=valor_preferido(opciones_cuenta, ultimo_form.get("cuenta")),
-                        ).classes("flex-1")
-                        ui.button(
-                            "Editar cuentas",
-                            icon="settings",
-                            on_click=lambda: open_accounts_editor(refresh_account_options),
-                        ).props("outline dense").classes("text-xs")
-                    nueva_cuenta = ui.input("Nueva cuenta").classes("w-full")
-                with ui.column().classes("flex-1 gap-2"):
-                    with ui.row().classes("w-full gap-2 items-center"):
+                        )
+                        style_entry_field(cuenta_select, lambda: save_transaction())
+                        nueva_cuenta = ui.input("Nueva cuenta")
+                        style_entry_field(nueva_cuenta, lambda: save_transaction())
+
+                with ui.element("div").classes("w-full grid grid-cols-1 md:grid-cols-2 gap-3"):
+                    with ui.column().classes("w-full gap-2"):
                         sector_select = ui.select(
                             opciones_sector,
                             label="Sector",
                             value=valor_preferido(opciones_sector, ultimo_form.get("sector")),
-                        ).classes("flex-1")
-                        ui.button(
-                            "Editar sectores",
-                            icon="settings",
-                            on_click=lambda: open_catalog_editor_dialog(
-                                titulo="Editar sectores",
-                                tabla="sectores",
-                                columna_uso="sector",
-                                input_label="Nuevo sector",
-                                add_button_label="Añadir sector",
-                                usuario=usuario,
-                                on_close=refresh_sector_options,
-                            ),
-                        ).props("outline dense").classes("text-xs")
-                    nuevo_sector = ui.input("Nuevo sector").classes("w-full")
+                        )
+                        style_entry_field(sector_select, lambda: save_transaction())
+                        nuevo_sector = ui.input("Nuevo sector")
+                        style_entry_field(nuevo_sector, lambda: save_transaction())
             nueva_cuenta.set_visibility(False)
             nuevo_sector.set_visibility(False)
             cuenta_select.on_value_change(lambda e: nueva_cuenta.set_visibility(e.value == "Otra"))
@@ -484,17 +521,9 @@ def render_ingresos_gastos(refresh, usuario):
                 guardar_ultima_operacion_form(data)
                 refresh_view(refresh, f"{tipo} de {formato_euros_sin_signo(abs(importe))} registrado correctamente.")
 
-            def show_transfer_form():
-                form_mode["value"] = "traspaso"
-                render_form.refresh()
-
-            with ui.row().classes("self-start gap-2"):
-                ui.button("Registrar Operación", icon="add", on_click=save_transaction)
-                ui.button(
-                    "Traspaso entre cuentas",
-                    icon="swap_horiz",
-                    on_click=show_transfer_form,
-                ).props("outline")
+            ui.button("Registrar operación", icon="add", on_click=save_transaction).props(
+                "unelevated no-caps size=lg"
+            ).classes("w-full bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl py-2.5 text-base")
 
         render_form()
 
